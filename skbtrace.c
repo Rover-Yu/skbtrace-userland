@@ -81,6 +81,7 @@ static char *Conf_pathlist = "./:/etc/skbtrace/";
 static char *Debugfs_path = "/sys/kernel/debug";
 static char *Output_path = "./skbtrace.results";
 static int Stop_timeout = 0;
+static long Nr_cpus;
 static int Subbuf_size = SKBTRACE_DEF_SUBBUF_SIZE;
 static int Subbuf_number = SKBTRACE_DEF_SUBBUF_NR;
 static int Overwrite_existed_results = O_EXCL;
@@ -435,9 +436,18 @@ static void disable_skbtrace(void)
 {
 	char *dropped;
 	unsigned long sc, si, hw;
+	long cpu;
+
 	skbtrace_enable("-*");
 	Tracing_stop = 1;
-	/*TODO: wait all tracing threads exit. */
+	for (cpu = 0; cpu < Nr_cpus; cpu++) {
+		char *msg;
+
+		pthread_join(Tracing_threads[cpu], (void**)&msg);
+		if (msg)
+			fprintf(stderr, "Thread-%ld: %s\n", cpu, msg);
+	}
+
 	dropped = skbtrace_dropped();
 	skbtrace_dropped_reset();
 	if (!dropped)
@@ -725,17 +735,17 @@ quit:
 
 static void start_tracing(void)
 {
-	long ncpus, cpu;
+	long cpu;
 
         setlocale(LC_NUMERIC, "en_US");
-        ncpus = sysconf(_SC_NPROCESSORS_ONLN);
-        if (ncpus < 0) {
+        Nr_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+        if (Nr_cpus < 0) {
                 fprintf(stderr, "sysconf(_SC_NPROCESSORS_ONLN) failed %d/%s\n",
                         errno, strerror(errno));
                 return;
         }
 
-	Tracing_threads = malloc(sizeof(pthread_t) * ncpus);
+	Tracing_threads = malloc(sizeof(pthread_t) * Nr_cpus);
 	if (!Tracing_threads) {
 		fprintf(stderr, "Need more memory\n");
 		return;
@@ -747,7 +757,7 @@ static void start_tracing(void)
         signal(SIGALRM, handle_sigint);
         signal(SIGPIPE, SIG_IGN);
 
-	for (cpu = 0; cpu < ncpus; cpu++) {
+	for (cpu = 0; cpu < Nr_cpus; cpu++) {
 		if (pthread_create(Tracing_threads+cpu, NULL, tracing, (void*)cpu))
 			break;
 	}
@@ -758,7 +768,7 @@ static void start_tracing(void)
 		disable_skbtrace();
 	}
 
-	for (ncpus = cpu, cpu = 0; cpu < ncpus; cpu++) {
+	for (cpu = 0; cpu < Nr_cpus; cpu++) {
 		char *msg;
 
 		pthread_join(Tracing_threads[cpu], (void**)&msg);
