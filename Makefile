@@ -22,7 +22,7 @@ scp:
 	scp ../skbtrace-userland/* root@${SSH_TARGET}:/tmp/userland
 
 scpfrom:
-	scp root@${172.16.227.128}:/tmp/userland/* .
+	scp root@${SSH_TARGET}:/tmp/userland/* .
 
 clean: 
 	rm -f *.o $(PROGS) tags cscope*
