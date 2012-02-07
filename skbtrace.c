@@ -56,6 +56,8 @@
 #define SKBTRACE_ENABLED_PATH	"/skbtrace/enabled"
 #define SKBTRACE_VERSION_PATH	"/skbtrace/version"
 #define SKBTRACE_DROPPED_PATH	"/skbtrace/dropped"
+#define SKBTRACE_SUBBUF_NR_PATH	"/skbtrace/subbuf_nr"
+#define SKBTRACE_SUBBUF_SIZE_PATH	"/skbtrace/subbuf_size"
 
 #define SKBTRACE_HARDIRQ_PATH	"/skbtrace/trace.hardirq.cpu"
 #define SKBTRACE_SOFTIRQ_PATH	"/skbtrace/trace.softirq.cpu"
@@ -83,11 +85,12 @@ static char *Output_path = "./skbtrace.results";
 static int Stop_timeout = 0;
 static long Nr_cpus;
 static int Subbuf_size = SKBTRACE_DEF_SUBBUF_SIZE;
-static int Subbuf_number = SKBTRACE_DEF_SUBBUF_NR;
+static int Subbuf_nr = SKBTRACE_DEF_SUBBUF_NR;
 static int Overwrite_existed_results = O_EXCL;
 static int Verbose;
 static int On_stdout;
 static pthread_spinlock_t Stdout_lock;
+static pthread_mutex_t Done_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static struct dirent **Event_list;
 static int Event_list_number;
@@ -166,23 +169,25 @@ static char *read_one_line(const char *dir, const char *fn, FILE **fp, char **li
 static char *append_one_line(const char *dir, const char *fn, char *line)
 {
 	char *path;
-	FILE *fp;
+	int fd;
+	ssize_t line_len;
 
 	path = malloc(strlen(dir) + strlen(fn) + 2);
 	if (!path)
 		return NULL;
 	sprintf(path, "%s/%s", dir, fn);
-	fp = fopen(path, "a");
+	fd = open(path, O_WRONLY|O_APPEND);
 	free(path);
-	if (!fp)
+	if (fd < 0)
 		return NULL;
 
-	if (1 != fwrite(line, strlen(line), 1, fp)) {
-		fclose(fp);
+	line_len = strlen(line);
+	if (line_len != write(fd, line, line_len)) {
+		close(fd);
 		return NULL;
 	}
 
-	fclose(fp);
+	close(fd);
 	return line;
 }
 
@@ -319,11 +324,9 @@ static void handle_args(int argc, char *argv[])
 		break;
 	case 'b':
 		Subbuf_size = atoi(optarg);
-		fprintf(stderr, "The -b option is unimplemented\n");
 		break;
 	case 'n':
-		Subbuf_number = atoi(optarg);
-		fprintf(stderr, "The -n option is unimplemented\n");
+		Subbuf_nr = atoi(optarg);
 		break;
 	}
 	}
@@ -336,7 +339,7 @@ static void handle_args(int argc, char *argv[])
 	fprintf(stderr, "Results output path = %s\n", Output_path);
 	fprintf(stderr, "Tracing during time = %d secs\n", Stop_timeout);
 	fprintf(stderr, "Relayfs subbuf size = %d Bytes\n", Subbuf_size);
-	fprintf(stderr, "Relayfs subbuf count = %d\n", Subbuf_number);
+	fprintf(stderr, "Relayfs subbuf count = %d\n", Subbuf_nr);
 	if (!Stop_timeout)
 		fprintf(stderr, "Tracing go on until you press <Ctrl-C>\n");
 	else
@@ -394,6 +397,23 @@ static void load_conf(void)
 	free(dir_list);
 }
 
+static void skbtrace_subbuf_setup(void)
+{
+	char buf[24];
+
+	sprintf(buf, "%d", Subbuf_size);
+	if (!append_one_line(Debugfs_path, SKBTRACE_SUBBUF_SIZE_PATH, buf)) {
+		fprintf(stderr, "Failed to setup subbuf_size=%s\n", buf);
+		exit(1);
+	}
+
+	sprintf(buf, "%d", Subbuf_nr);
+	if (!append_one_line(Debugfs_path, SKBTRACE_SUBBUF_NR_PATH, buf)) {
+		fprintf(stderr, "Failed to setup subbuf_nr=%s\n", buf);
+		exit(1);
+	}
+}
+
 static void enable_skbtrace(void)
 {
 	char *line;
@@ -411,6 +431,7 @@ static void enable_skbtrace(void)
 	free(line);
 
 	skbtrace_dropped_reset();
+	skbtrace_subbuf_setup();
 
 	if (Verbose)
 		fprintf(stderr, "Enabled event list:\n");
@@ -421,7 +442,7 @@ static void enable_skbtrace(void)
 		skbtrace_enable((char*)e->name);
 	}
 	if (!list_empty(&Enabled_event_list))
-		return;
+		goto quit;
 	if (Verbose)
 		fprintf(stderr, "\tALL events\n");
 
@@ -430,6 +451,8 @@ static void enable_skbtrace(void)
 		if (Event_list[i])
 			skbtrace_enable(Event_list[i]->d_name);
 	}
+quit:
+	pthread_mutex_lock(&Done_lock);
 }
 
 static void disable_skbtrace(void)
@@ -451,10 +474,12 @@ static void disable_skbtrace(void)
 	dropped = skbtrace_dropped();
 	skbtrace_dropped_reset();
 	if (!dropped)
-		return;
+		goto quit;
 	sscanf(dropped, "%lu %lu %lu", &hw, &si, &sc);
 	fprintf(stderr, "Dropped: hardirq/%lu softirq/%lu syscall/%lu\n",
 							hw, si, sc);
+quit:
+	pthread_mutex_unlock(&Done_lock);
 }
 
 static void handle_sigint(__attribute__((__unused__)) int sig)
@@ -598,7 +623,7 @@ static void* do_tracing_targeted_file(int epfd, long cpu)
 			if (events[nr_events].events & EPOLLERR)
 				return err_msg("epoll_wait()");
 			tracing = (tracing_t*)events[nr_events].data.ptr;
-			total = Subbuf_size*Subbuf_number;
+			total = Subbuf_size*Subbuf_nr;
 			do {
 				if (tracing->buf)
 					munmap(tracing->buf, total + getpagesize());
@@ -639,7 +664,7 @@ static void* do_tracing_targeted_stdout(int epfd, long cpu)
 	int nr_events;
 	char *buf;
 
-	buf = malloc(Subbuf_size*Subbuf_number);
+	buf = malloc(Subbuf_size*Subbuf_nr);
 	if (!buf)
 		return "Need more memory";
 
@@ -650,7 +675,7 @@ static void* do_tracing_targeted_stdout(int epfd, long cpu)
 				return err_msg("epoll_wait()");
 			tracing = (tracing_t*)events[nr_events].data.ptr;
 			do {
-				done = read(tracing->ifd, buf, Subbuf_size*Subbuf_number);
+				done = read(tracing->ifd, buf, Subbuf_size*Subbuf_nr);
 				if (done > 0) {
 					pthread_spin_lock(&Stdout_lock);
 					write(STDOUT_FILENO, &cpu, sizeof(long));
@@ -757,24 +782,20 @@ static void start_tracing(void)
         signal(SIGALRM, handle_sigint);
         signal(SIGPIPE, SIG_IGN);
 
+	enable_skbtrace();
+
 	for (cpu = 0; cpu < Nr_cpus; cpu++) {
 		if (pthread_create(Tracing_threads+cpu, NULL, tracing, (void*)cpu))
 			break;
 	}
 	
-	enable_skbtrace();
 	if (Stop_timeout > 0) {
 		sleep(Stop_timeout);
 		disable_skbtrace();
 	}
 
-	for (cpu = 0; cpu < Nr_cpus; cpu++) {
-		char *msg;
-
-		pthread_join(Tracing_threads[cpu], (void**)&msg);
-		if (msg)
-			fprintf(stderr, "Thread-%ld: %s\n", cpu, msg);
-	}
+	/* Wait for disable_skbtrace() finished */
+	pthread_mutex_lock(&Done_lock);
 }
 
 int main(int argc, char *argv[])
