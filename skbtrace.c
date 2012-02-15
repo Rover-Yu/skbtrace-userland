@@ -403,13 +403,13 @@ static void skbtrace_subbuf_setup(void)
 
 	sprintf(buf, "%d", Subbuf_size);
 	if (!append_one_line(Debugfs_path, SKBTRACE_SUBBUF_SIZE_PATH, buf)) {
-		fprintf(stderr, "Failed to setup subbuf_size=%s\n", buf);
+		fprintf(stderr, "Failed to setup subbuf_size=%s: %s\n", buf, strerror(errno));
 		exit(1);
 	}
 
 	sprintf(buf, "%d", Subbuf_nr);
 	if (!append_one_line(Debugfs_path, SKBTRACE_SUBBUF_NR_PATH, buf)) {
-		fprintf(stderr, "Failed to setup subbuf_nr=%s\n", buf);
+		fprintf(stderr, "Failed to setup subbuf_nr=%s: %s\n", buf, strerror(errno));
 		exit(1);
 	}
 }
