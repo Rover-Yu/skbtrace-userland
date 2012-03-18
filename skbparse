@@ -85,13 +85,13 @@ def handle_args(args):
 #
 taskctx_flags = {
 #	bit :	(desc-if-bit-set,	desc-if-bit-clear)
-	1 :	("tx",			"rx"),
+	4 :	("tx",			"rx"),
 }
 
 newsock_protocols = {
 #	protocol_nr :	desc
-	1 :		"tcp",
-	2 :		"udp",
+	4 :		"tcp",
+	5 :		"udp",
 }
 
 def context_data_desc(flags, data):
@@ -112,9 +112,9 @@ def unknown_data_desc(flags, data):
 
 Action_table = {
 #	action :	(action_desc,	flags_table,	seq_table,		data_desc),
-	1 :		("context",	taskctx_flags,	{},			context_data_desc),
-	2 :		("free",	{},		{},			free_data_desc),
-	3 :		("newsock",	{},		newsock_protocols,	newsock_data_desc),
+	0 :		("context",	taskctx_flags,	{},			context_data_desc),
+	1 :		("free",	{},		{},			free_data_desc),
+	2 :		("newsock",	{},		newsock_protocols,	newsock_data_desc),
 }
 
 def get_long_size():
