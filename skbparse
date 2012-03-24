@@ -110,7 +110,7 @@ def context_data_desc(flags, data):
 def tcpcong_data_desc(flags, data):
 	fmt = "IIII"
 	cwnd, rtt, sndnxt, snduna = struct.unpack(fmt, data)
-	return "cwnd=%s rtt=%d sndnxt=%d snduna=0x%x" % (cwnd, rtt, sndnxt, snduna)
+	return "cwnd=%s rtt=%d sndnxt=%d snduna=%d" % (cwnd, rtt, sndnxt, snduna)
 
 def free_data_desc(flags, data):
 	fmt = "L"
