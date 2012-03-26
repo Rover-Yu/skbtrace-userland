@@ -109,42 +109,56 @@ tcp_sndlim_flags = {
 	9 :     ("other",		""),
 }
 
-def context_data_desc(flags, data):
+def context_data_desc(ptr, flags, data):
 	fmt = "IIL16s"
 	pid, skblen, sk, comm = struct.unpack(fmt, data)
-	return "task=%s pid=%d len=%d sk=0x%x" % (comm.replace("\x00", ""), pid, skblen, sk)
+	desc  = "skb=0x%x" % ptr
+	desc += " task=%s" % comm.replace("\x00", "")
+	desc += " pid=%d" % pid
+	desc += " bytes=%d" % skblen
+	desc += " sock=0x%x" % sk
+	return desc
 
-def drop_data_desc(flags, data):
+def drop_data_desc(ptr, flags, data):
 	fmt = "L16s"
-	loc, desc = struct.unpack("L16s", data)
-	return "loc=0x%x desc=%s" % (loc, desc.replace("\x00", ""))
+	loc, s = struct.unpack("L16s", data)
+	desc  = "skb=0x%x" % ptr
+	desc += " loc=0x%x" % loc
+	desc += " desc=%s" % s.replace("\x00", "")
+	return desc
 
-def tcp_cong_data_desc(flags, data):
+def tcp_cong_data_desc(ptr, flags, data):
 	fmt = "IIII"
 	cwnd, rtt, sndnxt, snduna = struct.unpack(fmt, data)
-	return "cwnd=%s rtt=%d sndnxt=%d snduna=%d" % (cwnd, rtt, sndnxt, snduna)
+	desc  = "sock=0x%x" % ptr
+	desc += "cwnd=%d" % cwnd
+	desc += "rtt=%d" % rtt
+	desc += "sndnxt=%d" % sndnxt
+	desc += "snduna=%d" % snduna
+	return desc
 
-def tcp_conn_data_desc(flags, data):
+def tcp_conn_data_desc(ptr, flags, data):
 	return "TODO: parse tcp connection block"
 
-def tcp_sndlim_data_desc(flags, data):
+def tcp_sndlim_data_desc(ptr, flags, data):
+	desc  = "sock=0x%x" % ptr
 	if flags & (1 << 9):
 		fmt = "I"
 		val = struct.unpack(fmt, data)
-		return "val=%d" % val
-	return ""
+		desc += " val=%d" % val
+	return desc
 
-def unknown_data_desc(flags, data):
-	return "FIXME: unknown flags=0x%x data=%s" % (flags, `data`)
+def unknown_data_desc(ptr, flags, data):
+	return "FIXME: unknown ptr=0x%x flags=0x%x data=%s" % (ptr, flags, `data`)
 
 Action_table = {
-#	action :	(action_desc,	flags_table,	seq_table,		data_desc),
+#	action :	(action_desc,	flags_table,		seq_table,	data_desc),
 ########Common########
-	0   :		("context",	taskctx_flags,	{},			context_data_desc),
-	1   :		("drop",	{},		{},			drop_data_desc),
-########TCP###########
-	100 :		("tcp_cong",	tcp_cong_flags,	{},			tcp_cong_data_desc),
-	101 :		("tcp_conn",	tcp_conn_flags,	{},			tcp_conn_data_desc),
+	0   :		("context",	taskctx_flags,		{},		context_data_desc),
+	1   :		("drop",	{},			{},		drop_data_desc),
+########TCP##########
+	100 :		("tcp_cong",	tcp_cong_flags,		{},		tcp_cong_data_desc),
+	101 :		("tcp_conn",	tcp_conn_flags,		{},		tcp_conn_data_desc),
 	102 :		("tcp_sndlim",	tcp_sndlim_flags,	{},		tcp_sndlim_data_desc),
 }
 
@@ -160,7 +174,7 @@ def parse_skbtrace_header(ifile, ofile, cpu, hdr):
 	global Action_table
 	hdr_fmt = "HHILLL"
 	hdr_size = 2 + 2 + 4 + Size_long * 3
-	size, action, flags, sec, nsec, skb = struct.unpack(hdr_fmt, hdr)
+	size, action, flags, sec, nsec, ptr = struct.unpack(hdr_fmt, hdr)
 	action_str, flags_table, seq_table, data_desc = \
 		Action_table.get(action, (hex(action), {}, {}, unknown_data_desc))
 	flags_desc = ""
@@ -177,7 +191,6 @@ def parse_skbtrace_header(ifile, ofile, cpu, hdr):
 		flags_desc = "[" + seq_table[flags] + "] "
 
 	ofile.write("%d.%d\t" % (sec, nsec))
-	ofile.write("skb=0x%08x\t" % skb)
 	ofile.write("cpu=%s\t" % cpu)
 	ofile.write("action=%s\t" % action_str)
 	ofile.write(flags_desc)
@@ -187,7 +200,7 @@ def parse_skbtrace_header(ifile, ofile, cpu, hdr):
 		data = ifile.read(data_size)
 	else:
 		data = ""
-	ofile.write(data_desc(flags, data) + "\n")
+	ofile.write(data_desc(ptr, flags, data) + "\n")
 	return size
 
 def locate_skbtrace_results():
