@@ -97,7 +97,9 @@ tcp_cong_flags = {
 	4 :	("cwr",			""),
 	5 :	("loss",		""),
 	6 :	("fast-rtx",		""),
-	7 :	("leave",		""),
+	7 :	("frto",		""),
+	8 :	("frto-loss",		""),
+	9 :	("leave",		""),
 }
 
 tcp_sndlim_flags = {
@@ -131,10 +133,10 @@ def tcp_cong_data_desc(ptr, flags, data):
 	fmt = "IIII"
 	cwnd, rtt, sndnxt, snduna = struct.unpack(fmt, data)
 	desc  = "sock=0x%x" % ptr
-	desc += "cwnd=%d" % cwnd
-	desc += "rtt=%d" % rtt
-	desc += "sndnxt=%d" % sndnxt
-	desc += "snduna=%d" % snduna
+	desc += " cwnd=%d" % cwnd
+	desc += " rtt=%d" % rtt
+	desc += " sndnxt=%d" % sndnxt
+	desc += " snduna=%d" % snduna
 	return desc
 
 def tcp_conn_data_desc(ptr, flags, data):
