@@ -54,6 +54,7 @@
 #define SKBTRACE_CONF		"/skbtrace.conf"
 #define SKBTRACE_FTRACE_PATH	"/tracing/events/skbtrace"
 #define SKBTRACE_ENABLED_PATH	"/skbtrace/enabled"
+#define SKBTRACE_FILTERS_PATH	"/skbtrace/filters"
 #define SKBTRACE_VERSION_PATH	"/skbtrace/version"
 #define SKBTRACE_DROPPED_PATH	"/skbtrace/dropped"
 #define SKBTRACE_SUBBUF_NR_PATH	"/skbtrace/subbuf_nr"
@@ -65,7 +66,7 @@
 
 #define SKBTRACE_VERSION	"0.1.0"
 #define SKBTRACE_K_VERSION	"1"
-#define OPTSTRING		"r:D:w:b:n:c:fslvVh"
+#define OPTSTRING		"r:D:w:b:n:c:e:F:fslvVh"
 #define USAGE_STR \
 	"\t-r ARG Path to mounted debugfs, defaults to /sys/kernel/debug\n" \
 	"\t-D ARG Directory to prepend to output file names\n" \
@@ -73,6 +74,8 @@
 	"\t-b ARG Sub buffer size in KiB\n" \
 	"\t-n ARG Number of sub buffers\n" \
 	"\t-c ARG Search path for configuration file skbtrace.conf, default is to enable all tracepoints\n" \
+	"\t-e ARG One of available trace events, this can be used multiple times\n" \
+	"\t-F ARG Specify filter for sk_buff and sockets\n" \
 	"\t-f Overwrite existed result files\n" \
 	"\t-s Write result data on stdandard output\n" \
 	"\t-l List all available trace events (to help you constructing skbtrace.conf) \n" \
@@ -98,14 +101,27 @@ static int Event_list_number;
 static int Tracing_stop;
 static pthread_t *Tracing_threads;
 
+static LIST_HEAD(Enabled_filter_list);
+struct filter {
+	struct list_head list;
+	char name[];
+};
+
 static LIST_HEAD(Enabled_event_list);
 struct event {
 	struct list_head list;
-	char *name[];
+	char name[];
 };
 
 static char *read_one_line(const char *dir, const char *fn, FILE **fp, char **line, size_t *len);
 static char *append_one_line(const char *dir, const char *fn, char *line);
+static int add_one_event(char *event_spec);
+static int add_one_filter(char *filter_spec);
+
+static inline char *skbtrace_filter(char *filter)
+{
+	return append_one_line(Debugfs_path, SKBTRACE_FILTERS_PATH, filter);
+}
 
 static inline char *skbtrace_enable(char *event)
 {
@@ -303,6 +319,18 @@ static void handle_args(int argc, char *argv[])
 	case 'h':
 	default:
 		show_usage(argv);	/* exit here */
+	case 'e':
+		if (add_one_event(optarg)) {
+			fprintf(stderr, "failed to add event '%s'\n", optarg);
+			exit(1);
+		}
+		break;
+	case 'F':
+		if (add_one_filter(optarg)) {
+			fprintf(stderr, "failed to add filter '%s'\n", optarg);
+			exit(1);
+		}
+		break;
 	case 'c':
 		Conf_pathlist = optarg;
 		break;
@@ -329,6 +357,11 @@ static void handle_args(int argc, char *argv[])
 		Subbuf_nr = atoi(optarg);
 		break;
 	}
+	}
+
+	if (optind < argc) {
+		fprintf(stderr, "Unknown command line argument:%s\n", argv[optind]);
+		exit(1);
 	}
 
 	if (!Verbose)
@@ -360,6 +393,68 @@ static int is_available_event(const char *event_name)
 	return 0;
 }
 
+static int add_one_filter(char *filter_spec)
+{
+	struct filter *f;
+
+	if (!filter_spec)
+		return -EINVAL;
+
+	list_for_each_entry(f, &Enabled_filter_list, list) {
+		if (!strcmp(f->name, filter_spec))
+			return -EEXIST;
+	}
+
+	f = malloc(sizeof(struct filter) + strlen(filter_spec) + 1);
+	if (!f) {
+		fprintf(stderr, "Need more memory\n");
+		exit(1);
+	}
+
+	INIT_LIST_HEAD(&f->list);
+	strcpy((char*)f->name, filter_spec);
+	list_add_tail(&f->list, &Enabled_filter_list);
+	return 0;
+}
+
+static int validate_events(void)
+{
+	struct event *e;
+
+	list_for_each_entry(e, &Enabled_event_list, list) {
+		if (!is_available_event(e->name)) {
+			fprintf(stderr, "%s is not an available event.\n", e->name);
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+static int add_one_event(char *event_spec)
+{
+	struct event *e;
+
+	if (!event_spec)
+		return -EINVAL;
+
+	list_for_each_entry(e, &Enabled_event_list, list) {
+		if (!strcmp(e->name, event_spec))
+			return -EEXIST;
+	}
+
+	e = malloc(sizeof(struct event) + strlen(event_spec) + 1);
+	if (!e) {
+		fprintf(stderr, "Need more memory\n");
+		exit(1);
+	}
+
+	INIT_LIST_HEAD(&e->list);
+	strcpy((char*)e->name, event_spec);
+	list_add_tail(&e->list, &Enabled_event_list);
+	return 0;
+}
+
 static void load_one_conf(const char *dir)
 {
 	char *line = NULL;
@@ -367,18 +462,10 @@ static void load_one_conf(const char *dir)
 	size_t len = 0;
 
 	while (read_one_line(dir, SKBTRACE_CONF, &fp, &line, &len)) {
-		struct event *e;
-		
-		if (!is_available_event(line))
-			continue;
-		e = malloc(sizeof(struct event) + strlen(line) + 1);
-		if (!e) {
-			fprintf(stderr, "Need more memory\n");
-			exit(1);
+		if (add_one_event(line)) {
+			fprintf(stderr, "failed to add event '%s'\n", line);
+			break;
 		}
-		INIT_LIST_HEAD(&e->list);
-		strcpy((char*)e->name, line);
-		list_add_tail(&e->list, &Enabled_event_list);
 	}
 	if (line)
 		free(line);
@@ -417,8 +504,8 @@ static void skbtrace_subbuf_setup(void)
 static void enable_skbtrace(void)
 {
 	char *line;
-	struct list_head *list;
 	struct event *e;
+	struct filter *f;
 	int i;
 
 	line = skbtrace_version();
@@ -433,23 +520,34 @@ static void enable_skbtrace(void)
 	skbtrace_dropped_reset();
 	skbtrace_subbuf_setup();
 
+	if (Verbose && !list_empty(&Enabled_filter_list))
+		fprintf(stderr, "Enabled filter list:\n");
+
+	list_for_each_entry(f, &Enabled_filter_list, list) {
+		if (Verbose)
+			fprintf(stderr, "\t%s\n", (char*)f->name);
+		skbtrace_filter((char*)f->name);
+	}
+
 	if (Verbose)
 		fprintf(stderr, "Enabled event list:\n");
-	__list_for_each(list, &Enabled_event_list) {
-		e = container_of(list, struct event, list);
-		if (Verbose)	
+
+	list_for_each_entry(e, &Enabled_event_list, list) {
+		if (Verbose)
 			fprintf(stderr, "\t%s\n", (char*)e->name);
 		skbtrace_enable((char*)e->name);
 	}
+
 	if (!list_empty(&Enabled_event_list))
 		goto quit;
-	if (Verbose)
-		fprintf(stderr, "\tALL events\n");
 
 	i = Event_list_number;
 	while (i--) {
-		if (Event_list[i])
+		if (Event_list[i]) {
+			if (Verbose)
+				fprintf(stderr, "\t%s\n", Event_list[i]->d_name);
 			skbtrace_enable(Event_list[i]->d_name);
+		}
 	}
 quit:
 	pthread_mutex_lock(&Done_lock);
@@ -761,6 +859,9 @@ quit:
 static void start_tracing(void)
 {
 	long cpu;
+
+	if (!validate_events())
+		return;
 
         setlocale(LC_NUMERIC, "en_US");
         Nr_cpus = sysconf(_SC_NPROCESSORS_ONLN);
