@@ -475,6 +475,10 @@ static void load_conf(void)
 {
 	char *dir_list, *dir;
 
+	if (!list_empty(&Enabled_event_list))
+		/* Use any -e option will bypass configration */
+		return;
+
 	dir_list = strdup(Conf_pathlist);
 	dir = strtok(dir_list, ":");
 	while (dir) {
