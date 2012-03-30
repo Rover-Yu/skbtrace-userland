@@ -588,6 +588,7 @@ quit:
 static void handle_sigint(__attribute__((__unused__)) int sig)
 {
 	disable_skbtrace();
+	exit(0);
 }
 
 static void* err_msg(char *source)
@@ -845,12 +846,20 @@ static void *tracing(void *p_cpu)
 	void *msg;
 
 	msg = lock_on_cpu(cpu);
-	if (msg)
+	if (msg) {
+		fprintf(stderr, "Thread-%ld: %s\n", cpu, (char*)msg);
+		msg = NULL;
+		kill(getpid(), SIGINT);
 		goto quit;
+	}
 
 	msg = setup_tracing(cpu, fd);
-	if (msg)
+	if (msg) {
+		fprintf(stderr, "Thread-%ld: %s\n", cpu, (char*)msg);
+		msg = NULL;
+		kill(getpid(), SIGINT);
 		goto quit;
+	}
 
 	msg = do_tracing(cpu, fd);
 	if (msg)
