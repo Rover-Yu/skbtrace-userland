@@ -282,7 +282,7 @@ static void check_debugfs(void)
 		exit(1);
 	}
 	sprintf(skbtrace_path, "%s" SKBTRACE_FTRACE_PATH, Debugfs_path);
-	
+
 	if (stat(skbtrace_path, &st) < 0) {
 		fprintf(stderr, "Invalid skbtrace path %s\n", skbtrace_path);
 		exit(1);
@@ -512,12 +512,20 @@ static void enable_skbtrace(void)
 	struct filter *f;
 	int i;
 
+	i = 0;
+
+retry:
 	line = skbtrace_version();
 	if (!line || strcmp(line, SKBTRACE_K_VERSION)) {
 		if (line)
 			free(line);
-		fprintf(stderr, "Requires skbtrace kernel API version " SKBTRACE_K_VERSION "\n");
-		exit(1);
+		if (i > 0) {
+			fprintf(stderr, "Requires skbtrace kernel API version " SKBTRACE_K_VERSION "\n");
+			exit(1);
+		}
+		system("/sbin/modprobe skbtrace");
+		i++;
+		goto retry;
 	}
 	free(line);
 
