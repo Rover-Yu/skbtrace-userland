@@ -517,6 +517,7 @@ static void enable_skbtrace(void)
 	}
 	free(line);
 
+	skbtrace_enable("-*");
 	skbtrace_dropped_reset();
 	skbtrace_subbuf_setup();
 
