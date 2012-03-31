@@ -786,7 +786,7 @@ static void* do_tracing_targeted_file(int epfd, long cpu)
 				done = read(tracing->ifd, tracing->buf + tracing->size - offset, total);
 				if (done > 0)
 					tracing->size += done;
-				else if (EAGAIN == errno)
+				else if (!done || EAGAIN == errno)
 					break;
 				else
 					return err_msg("read()");
@@ -836,9 +836,10 @@ if (Verbose > 1)
 						cpu, tracing->ifd, done);
 }
 					continue;
-				}
-				if (!done || (EAGAIN != errno))
+				} else if (!done || EAGAIN != errno)
 					break;
+				else
+					return err_msg("read()");
 			} while (1);
 		}
 		if (Tracing_stop)
