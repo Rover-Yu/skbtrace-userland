@@ -71,7 +71,7 @@
 	"\t-r ARG Path to mounted debugfs, defaults to /sys/kernel/debug\n" \
 	"\t-D ARG Directory to prepend to output file names\n" \
 	"\t-w ARG Stop after defined time, in seconds\n" \
-	"\t-b ARG Sub buffer size in KiB\n" \
+	"\t-b ARG Sub buffer size in bytes\n" \
 	"\t-n ARG Number of sub buffers\n" \
 	"\t-c ARG Search path for configuration file skbtrace.conf, default is to enable all tracepoints\n" \
 	"\t-C ARG Given a channel mask to specifiy what are channels which skbtrace can receive from\n" \
@@ -786,11 +786,10 @@ static void* do_tracing_targeted_file(int epfd, long cpu)
 				done = read(tracing->ifd, tracing->buf + tracing->size - offset, total);
 				if (done > 0)
 					tracing->size += done;
-				else if (!done || EAGAIN == errno)
+				else if (EAGAIN == errno)
 					break;
-				else {
+				else
 					return err_msg("read()");
-				}
 if (Verbose > 1)
 {
 				fprintf(stderr, "cpu=%ld ifd=%d ofd=%d offset=%ld read=%ld size=%ld\n",
