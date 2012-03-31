@@ -66,7 +66,7 @@
 
 #define SKBTRACE_VERSION	"0.1.0"
 #define SKBTRACE_K_VERSION	"1"
-#define OPTSTRING		"r:D:w:b:n:c:e:F:fslvVh"
+#define OPTSTRING		"r:D:w:b:n:c:C:e:F:fslvVh"
 #define USAGE_STR \
 	"\t-r ARG Path to mounted debugfs, defaults to /sys/kernel/debug\n" \
 	"\t-D ARG Directory to prepend to output file names\n" \
@@ -74,11 +74,13 @@
 	"\t-b ARG Sub buffer size in KiB\n" \
 	"\t-n ARG Number of sub buffers\n" \
 	"\t-c ARG Search path for configuration file skbtrace.conf, default is to enable all tracepoints\n" \
+	"\t-C ARG Given a channel mask to specifiy what are channels which skbtrace can receive from\n" \
+	"\t-p ARG Given a processors mask to specifiy what are processors which skbtrace can receive from\n" \
 	"\t-e ARG One of available trace events, this can be used multiple times\n" \
 	"\t-F ARG Specify filter for sk_buff and sockets\n" \
 	"\t-f Overwrite existed result files\n" \
 	"\t-s Write result data on stdandard output\n" \
-	"\t-l List all available trace events (to help you constructing skbtrace.conf) \n" \
+	"\t-l List all available trace events, and channels\n" \
 	"\t-V Show actual configuration details\n" \
 	"\t-v Print program version info\n\n"
 
@@ -92,6 +94,9 @@ static int Subbuf_nr = SKBTRACE_DEF_SUBBUF_NR;
 static int Overwrite_existed_results = O_EXCL;
 static int Verbose;
 static int On_stdout;
+static unsigned int Channels_mask= -1;	 /* receive data from all channels, default */
+/* TODO: replace Processors_mask with a bitmap */
+static unsigned long Processors_mask= -1; /* receive data from all processors, default */
 static pthread_spinlock_t Stdout_lock;
 static pthread_mutex_t Done_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -245,10 +250,11 @@ static void show_available_events(void)
 {
 	int n;
 
+	fprintf(stderr, "Available events:\n");
 	n = Event_list_number;
 	while (n--) {
 		if (Event_list[n])
-			fprintf(stderr, "%s\n", Event_list[n]->d_name);
+			fprintf(stderr, "\t%s\n", Event_list[n]->d_name);
 	}
 }
 
@@ -291,11 +297,21 @@ static void check_debugfs(void)
 	free(skbtrace_path);
 }
 
+
+static void show_available_channels(void)
+{
+	fprintf(stderr, "Available channels:\n");
+	fprintf(stderr, "\tSyscall mask=%x\n", 1<<SC);
+	fprintf(stderr, "\tSoftirq mask=%x\n", 1<<SI);
+	fprintf(stderr, "\tHardirq mask=%x\n", 1<<HW);
+}
+
 static void show_skbtrace_events(void)
 {
 	check_debugfs();
 	load_available_events();
 	show_available_events();
+	show_available_channels();
 	exit(0);
 }
 
@@ -333,6 +349,20 @@ static void handle_args(int argc, char *argv[])
 		break;
 	case 'c':
 		Conf_pathlist = optarg;
+		break;
+	case 'C':
+		Channels_mask = atoi(optarg);
+		if (!Channels_mask) {
+			fprintf(stderr, "Invalid channels mask\n");
+			exit(1);
+		}
+		break;
+	case 'p':
+		Processors_mask = atoi(optarg);
+		if (!Processors_mask) {
+			fprintf(stderr, "Invalid procsessors mask\n");
+			exit(1);
+		}
 		break;
 	case 'r':
 		Debugfs_path = optarg;
@@ -647,8 +677,18 @@ static void* __setup_tracing_fd(char *prefix, char *fn, long cpu,
 	int flags;
 	mode_t mode;
 
+	if (!(Processors_mask & (1<<cpu))) {
+		fd[idx] = -1;
+		return NULL;
+	}
+
 	if (On_stdout && idx >= NR_CHANNELS) {
 		fd[idx] = STDOUT_FILENO;
+		return NULL;
+	}
+
+	if (!(Channels_mask & (1<<idx))) {
+		fd[idx] = -1;
 		return NULL;
 	}
 
@@ -690,9 +730,6 @@ static void* setup_tracing(long cpu, int fd[NR_CHANNELS*2])
 {
 	char *msg;
 	unsigned int i;
-
-	if (cpu > 9999)
-		return "Too many CPUs";
 
 	for (i = 0; i < sizeof(fd)/sizeof(int); i++)
 		fd[i] = -1;
@@ -825,6 +862,8 @@ static void* do_tracing(long cpu, int fd[NR_CHANNELS*2])
 		return err_msg("epoll_create()");
 
 	for (i = 0; i < NR_CHANNELS; i++) {
+		if (fd[i] < 0 || fd[i + NR_CHANNELS] < 0)
+			continue;
 		tracing_array[i].ifd = fd[i];
 		tracing_array[i].ofd = fd[i + NR_CHANNELS];
 		tracing_array[i].buf = NULL;
