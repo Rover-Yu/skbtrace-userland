@@ -102,7 +102,7 @@ tcp_cong_flags = {
 	9 :	("leave",		""),
 }
 
-tcp_sndlim_flags = {
+tcp_sendlim_flags = {
 	4 :     ("cwnd",		""),
 	5 :     ("swnd",		""),
 	6 :     ("nagle",		""),
@@ -142,12 +142,13 @@ def tcp_cong_data_desc(ptr, flags, data):
 def tcp_conn_data_desc(ptr, flags, data):
 	return "TODO: parse tcp connection block"
 
-def tcp_sndlim_data_desc(ptr, flags, data):
+def tcp_sendlim_data_desc(ptr, flags, data):
 	desc  = "sock=0x%x" % ptr
-	if flags & (1 << 9):
-		fmt = "I"
-		val = struct.unpack(fmt, data)
-		desc += " val=%d" % val
+	fmt = "IILL"
+	val,cnt,sec,nsec = struct.unpack(fmt, data)
+	desc += " begin=%d.%d" % (sec, nsec)
+	desc += " cnt=%d" % cnt
+	desc += " val=%d" % val
 	return desc
 
 def unknown_data_desc(ptr, flags, data):
@@ -156,12 +157,12 @@ def unknown_data_desc(ptr, flags, data):
 Action_table = {
 #	action :	(action_desc,	flags_table,		seq_table,	data_desc),
 ########Common########
-	0   :		("context",	taskctx_flags,		{},		context_data_desc),
-	1   :		("drop",	{},			{},		drop_data_desc),
+	1   :		("context",	taskctx_flags,		{},		context_data_desc),
+	2   :		("drop",	{},			{},		drop_data_desc),
 ########TCP##########
-	100 :		("tcp_cong",	tcp_cong_flags,		{},		tcp_cong_data_desc),
-	101 :		("tcp_conn",	tcp_conn_flags,		{},		tcp_conn_data_desc),
-	102 :		("tcp_sndlim",	tcp_sndlim_flags,	{},		tcp_sndlim_data_desc),
+	101 :		("tcp_cong",	tcp_cong_flags,		{},		tcp_cong_data_desc),
+	102 :		("tcp_conn",	tcp_conn_flags,		{},		tcp_conn_data_desc),
+	103 :		("tcp_sendlim",	tcp_sendlim_flags,	{},		tcp_sendlim_data_desc),
 }
 
 def get_long_size():
