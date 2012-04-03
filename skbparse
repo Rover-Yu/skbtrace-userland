@@ -11,8 +11,30 @@ import time
 import glob
 import struct
 import re
+import socket
 
 SKBPARSE_VERSION = "0.1.0"
+
+SZ_SOCKADDR_IN4 = 16
+SZ_SOCKADDR_IN6 = 28
+
+SZ_ADDR_IN4 = 4
+SZ_ADDR_IN6 = 16
+
+def parse_sockaddr(sockaddr):
+	family = sockaddr[:2]
+	family = (ord(family[1]) << 8) + ord(family[0])
+	if family == socket.AF_INET:
+		sin_port = sockaddr[2:2+2]
+		port = (ord(sin_port[0]) << 8) + ord(sin_port[1])
+		sin_addr = sockaddr[4:4+SZ_ADDR_IN4]
+		addr = socket.inet_ntop(socket.AF_INET, sin_addr)
+		sz = SZ_SOCKADDR_IN4
+	else:
+		addr = "Not-IPv4"
+		port = 0
+		sz = 0
+	return (addr, port), sz
 
 def setup_conf_table(conf_table, key, value):
 	if value:
@@ -80,6 +102,48 @@ def handle_args(args):
 			value = True
 		callback(Conf_table, conf_name, value)
 
+af_table = {
+	0        : "AF_UNSPEC",
+	1	 : "AF_UNIX",
+	1	 : "AF_LOCAL",
+	2	 : "AF_INET",
+	3	 : "AF_AX25",
+	4	 : "AF_IPX",
+	5	 : "AF_APPLETALK",
+	6	 : "AF_NETROM",
+	7	 : "AF_BRIDGE",
+	8	 : "AF_ATMPVC",
+	9	 : "AF_X25",
+	10	: "AF_INET6",
+	11	: "AF_ROSE",
+	12	: "AF_DECnet",
+	13	: "AF_NETBEUI",
+	14	: "AF_SECURITY",
+	15        : "AF_KEY",
+	16        : "AF_NETLINK/ROUTE",
+	17	: "AF_PACKET",
+	18	: "AF_ASH",
+	19	: "AF_ECONET",
+	20	: "AF_ATMSVC",
+	21	: "AF_RDS",
+	22	: "AF_SNA",
+	23	: "AF_IRDA",
+	24	: "AF_PPPOX",
+	25	: "AF_WANPIPE",
+	26	: "AF_LLC",
+	29	: "AF_CAN",
+	30	: "AF_TIPC",
+	31	: "AF_BLUETOOTH",
+	32	: "AF_IUCV",
+	33	: "AF_RXRPC",
+	34	: "AF_ISDN",
+	35	: "AF_PHONET",
+	36	: "AF_IEEE802154",
+	37	: "AF_CAIF",
+	38	: "AF_ALG",
+	39	: "AF_NFC",
+}
+
 #
 # kernel/include/linux/skbtrace_api.h
 #
@@ -88,8 +152,17 @@ taskctx_flags = {
 	4 :	("tx",			"rx"),
 }
 
-
 tcp_conn_flags = {
+	4  : ("ESTABLISHED",	""),
+	5  : ("SYN_SENT",	""),
+	6  : ("SYN_RECV",	""),
+	7  : ("FIN_WAIT1",	""),
+	8  : ("FIN_WAIT2",	""),
+	9  : ("TIME_WAIT",	""),
+	10 : ("CLOSE",		""),
+	11 : ("CLOSE_WAIT",	""),
+	12 : ("LAST_ACK",	""),
+	13 : ("LISTEN",		""),
 }
 
 tcp_cong_flags = {
@@ -140,7 +213,14 @@ def tcp_cong_data_desc(ptr, flags, data):
 	return desc
 
 def tcp_conn_data_desc(ptr, flags, data):
-	return "TODO: parse tcp connection block"
+	desc  = "sock=0x%x" % ptr
+	local, size = parse_sockaddr(data)
+	if size:
+		desc += " local=%s:%d" % (local[0], local[1])
+		if not (flags & ((1<<8)|(1<<9)|(1<<13))):
+			peer, size = parse_sockaddr(data[size:])
+			desc += " peer=%s:%d" % (peer[0], peer[1])
+	return desc
 
 def tcp_sendlim_data_desc(ptr, flags, data):
 	desc  = "sock=0x%x" % ptr
@@ -175,10 +255,10 @@ Size_long = get_long_size()
 
 def parse_skbtrace_header(ifile, ofile, cpu, hdr):
 	global Action_table
-	hdr_fmt = "HHILLL"
-	hdr_size = 2 + 2 + 4 + Size_long * 3
-	size, action, flags, sec, nsec, ptr = struct.unpack(hdr_fmt, hdr)
-	action_str, flags_table, seq_table, data_desc = \
+	hdr_fmt = "HHILLPL"
+	hdr_size = 2 + 2 + 4 + Size_long * 3 + 8
+	size, action, flags, sec, nsec, seq, ptr = struct.unpack(hdr_fmt, hdr)
+	action_str, flags_table, seqf_table, data_desc = \
 		Action_table.get(action, (hex(action), {}, {}, unknown_data_desc))
 	flags_desc = ""
 	for f in flags_table:
@@ -190,20 +270,23 @@ def parse_skbtrace_header(ifile, ofile, cpu, hdr):
 			flags_desc += desc + ","
 	if flags_desc != "":
 		flags_desc = "[" + flags_desc[:-1] + "] "
-	elif seq_table:
-		flags_desc = "[" + seq_table[flags] + "] "
+	elif seqf_table:
+		flags_desc = "[" + seqf_table[flags] + "] "
 
-	ofile.write("%d.%d\t" % (sec, nsec))
-	ofile.write("cpu=%s\t" % cpu)
-	ofile.write("action=%s\t" % action_str)
-	ofile.write(flags_desc)
+	ofile.write("%ld " % seq)
+	ofile.write("%d.%d " % (sec, nsec))
+	ofile.write("cpu=%s " % cpu)
+	ofile.write("action=%s " % action_str)
+	ofile.write(" " + flags_desc)
 
 	data_size = size - hdr_size
 	if data_size:
 		data = ifile.read(data_size)
 	else:
 		data = ""
-	ofile.write(data_desc(ptr, flags, data) + "\n")
+	if data:
+		ofile.write(" " + data_desc(ptr, flags, data))
+	ofile.write("\n")
 	return size
 
 def locate_skbtrace_results():
@@ -243,8 +326,8 @@ def do_stdin_skbparse():
 	parse = sys.stdout
 	cpu_pktlen_fmt = "LL"
 	cpu_pktlen_size = Size_long * 2
-	hdr_fmt = "HHILLL"
-	hdr_size = 2 + 2 + 4 + Size_long * 3
+	hdr_fmt = "HHILLPL"
+	hdr_size = 2 + 2 + 4 + Size_long * 3 + 8
 
 	binary = trace.read(cpu_pktlen_size)
 	while binary:
@@ -270,7 +353,7 @@ def do_skbparse(ifn = "", ofn = ""):
 			else:
 				parse = sys.stdout
 			size_long = get_long_size()
-			hdr_size = 2 + 2 + 4 + size_long * 3
+			hdr_size = 2 + 2 + 4 + size_long * 3 + 8
 			binary = trace.read(hdr_size)
 			while binary:
 				parse_skbtrace_header(trace, parse, cpu, binary)
