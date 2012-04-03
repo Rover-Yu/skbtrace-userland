@@ -186,11 +186,11 @@ tcp_sendlim_flags = {
 
 def context_data_desc(ptr, flags, data):
 	fmt = "IIL16s"
-	pid, skblen, sk, comm = struct.unpack(fmt, data)
+	pid, tid, sk, comm = struct.unpack(fmt, data)
 	desc  = "skb=0x%x" % ptr
 	desc += " task=%s" % comm.replace("\x00", "")
 	desc += " pid=%d" % pid
-	desc += " bytes=%d" % skblen
+	desc += " tid=%d" % tid
 	desc += " sock=0x%x" % sk
 	return desc
 
@@ -203,11 +203,12 @@ def drop_data_desc(ptr, flags, data):
 	return desc
 
 def tcp_cong_data_desc(ptr, flags, data):
-	fmt = "IIII"
-	cwnd, rtt, sndnxt, snduna = struct.unpack(fmt, data)
+	fmt = "IIIII"
+	rcv_rtt, rto, cwnd, sndnxt, snduna = struct.unpack(fmt, data)
 	desc  = "sock=0x%x" % ptr
 	desc += " cwnd=%d" % cwnd
-	desc += " rtt=%d" % rtt
+	desc += " rto=%d" % rto
+	desc += " rcv_rtt=%d" % rcv_rtt
 	desc += " sndnxt=%d" % sndnxt
 	desc += " snduna=%d" % snduna
 	return desc
