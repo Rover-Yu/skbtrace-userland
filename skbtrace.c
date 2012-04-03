@@ -766,6 +766,11 @@ static void* do_tracing_targeted_file(int epfd, long cpu)
 	int nr_events;
 
 	while ((nr_events = epoll_wait(epfd, (struct epoll_event*)events, NR_CHANNELS, 100)) >= 0) {
+
+if (Verbose > 1 && nr_events) {
+	fprintf(stderr, "epoll_wait() return with %d events\n", nr_events);
+}
+
 		while (--nr_events >= 0) {
 			ssize_t total, offset, done;
  			
@@ -817,6 +822,10 @@ static void* do_tracing_targeted_stdout(int epfd, long cpu)
 		return "Need more memory";
 
 	while ((nr_events = epoll_wait(epfd, (struct epoll_event*)events, NR_CHANNELS, 100)) >= 0) {
+
+if (Verbose > 1 && nr_events) {
+	fprintf(stderr, "epoll_wait() return with %d events\n", nr_events);
+}
 		while (--nr_events >= 0) {
 			ssize_t done;
 			if (events[nr_events].events & EPOLLERR)
