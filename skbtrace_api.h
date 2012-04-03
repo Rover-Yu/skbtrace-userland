@@ -27,6 +27,9 @@
 
 #ifdef __KERNEL__
 #include <linux/time.h>
+#include <linux/sched.h>
+#include <linux/in.h>
+#include <linux/in6.h>
 #else
 #include <time.h>
 #define TASK_COMM_LEN	16
@@ -63,10 +66,12 @@ enum {
 
 /* common skbtrace_block->flags */
 enum {
+	skbtrace_flags_reserved_min = 3,
 	skbtrace_flags_reserved_0 = 0,
 	skbtrace_flags_reserved_1 = 1,
 	skbtrace_flags_reserved_2 = 2,
 	skbtrace_flags_reserved_3 = 3,
+	skbtrace_flags_reserved_max = 3,
 };
 
 /* skbtrace_block->flags for skb_context */
@@ -85,6 +90,7 @@ struct skbtrace_block {
 	__u16 action;
 	__u32 flags;
 	struct timespec ts;
+	u64 seq;
 	void *ptr;
 } __packed;
 
@@ -97,8 +103,8 @@ struct skbtrace_drop_blk {
 
 struct skbtrace_context_blk {
 	struct skbtrace_block blk;
-	pid_t pid;
-	unsigned int bytes;
+	pid_t pid;	/* FIXME: namespace support */
+	pid_t tid;
 	void *sk;
 	char comm[TASK_COMM_LEN];
 } __packed;
@@ -128,43 +134,30 @@ enum {
 
 struct skbtrace_tcp_cong_blk {
 	struct skbtrace_block blk;
+	__u32	srtt;
+	__u32	rto;
 	__u32	cwnd;
-	__u32	rtt;
 	__u32	sndnxt;
 	__u32	snduna;
 } __packed;
 
-/*
- * TCP basic connection events (101)
- *
- * the basic connection events contain
- *
- * 	a. All events after beginning of the sock
- * 	   struct is created, and before entering ESTABLISHED
- * 	   state.
- * 	b. All events after sending or receiving FIN segment,
- * 	   and before the sock struct is destroyed.
- */
-enum {
-	skbtrace_tcp_conn_change	= 4,	/* TCP state migration */
-	skbtrace_tcp_defer_accept	= 5,	/* Defer handle for last ACK */
-	skbtrace_tcp_3whs_retrans	= 6,	/* Retrans SYN or SYN/ACK */
-};
-
-struct tcp_conn_state {
-	int val;
+/* TCP basic connection events (101) */
+struct skbtrace_tcp_conn_blk {
+	struct skbtrace_block blk;
 	union {
 		struct {
 			struct sockaddr local;
 			struct sockaddr peer;
-		} addr;	/* for active openning connection */
-		void *req; /* for passive openning connection */
-	} ext;
-};
-
-struct skbtrace_tcp_conn_blk {
-	struct skbtrace_block blk;
-	struct tcp_conn_state state;
+		};
+		struct {
+			struct sockaddr_in local;
+			struct sockaddr_in peer;
+		} inet;
+		struct {
+			struct sockaddr_in6 local;
+			struct sockaddr_in6 peer;
+		} inet6;
+	} addr;
 } __packed;
 
 /* TCP send limit event (102) */
