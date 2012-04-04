@@ -1,0 +1,7 @@
+TODO
+------------
+Add channal={softirq,hardirq,syscall} in stdin/stdout protocol.
+Use bitmap to replace unsigne long to handle CPU mask.
+
+DONE
+------------
