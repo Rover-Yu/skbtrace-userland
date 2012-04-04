@@ -76,7 +76,9 @@
 	"\t-c ARG Search path for configuration file skbtrace.conf, default is to enable all tracepoints\n" \
 	"\t-C ARG Given a channel mask to specifiy what are channels which skbtrace can receive from\n" \
 	"\t-p ARG Given a processors mask to specifiy what are processors which skbtrace can receive from\n" \
-	"\t-e ARG One of available trace events, this can be used multiple times\n" \
+	"\t-e EVENT[,OPTIONS_LIST] Specifiy an interesting trace event, this can be used multiple times\n" \
+	"\t\tEVENT\t\tOne of available trace events, please refer the output of -l option\n" \
+	"\t\tOPTIONS_LIST\tThe optional parameters of the trace event, the format is option1=val1,option2=val2,...\n" \
 	"\t-F ARG Specify filter for sk_buff and sockets\n" \
 	"\t-f Overwrite existed result files\n" \
 	"\t-s Write result data on stdandard output\n" \
@@ -115,6 +117,7 @@ struct filter {
 static LIST_HEAD(Enabled_event_list);
 struct event {
 	struct list_head list;
+	char *options;
 	char name[];
 };
 
@@ -128,9 +131,25 @@ static inline char *skbtrace_filter(char *filter)
 	return append_one_line(Debugfs_path, SKBTRACE_FILTERS_PATH, filter);
 }
 
-static inline char *skbtrace_enable(char *event)
+static inline char *skbtrace_enable_default(char *spec)
 {
-	return append_one_line(Debugfs_path, SKBTRACE_ENABLED_PATH, event);
+	return append_one_line(Debugfs_path, SKBTRACE_ENABLED_PATH, spec);
+}
+
+static inline char *skbtrace_enable(struct event *e)
+{
+	char spec[4096];
+
+	if (e) {
+		if (e->options)
+			snprintf(spec, 4096, "%s,%s", e->name, e->options);
+		else
+			snprintf(spec, 4096, "%s", e->name);
+	} else {
+		strcpy(spec, "-*");
+	}
+
+	return append_one_line(Debugfs_path, SKBTRACE_ENABLED_PATH, spec);
 }
 
 static inline char *skbtrace_dropped_reset(void)
@@ -463,24 +482,34 @@ static int validate_events(void)
 
 static int add_one_event(char *event_spec)
 {
+	int sz;
+	char *name, *options;
 	struct event *e;
 
 	if (!event_spec)
 		return -EINVAL;
 
+	sz = strlen(event_spec) + 1;
+	name = event_spec;
+	options = strchr(event_spec, ',');
+	if (options) {
+		*options = '\x0';
+	}
+
 	list_for_each_entry(e, &Enabled_event_list, list) {
-		if (!strcmp(e->name, event_spec))
+		if (!strcmp(e->name, name))
 			return -EEXIST;
 	}
 
-	e = malloc(sizeof(struct event) + strlen(event_spec) + 1);
+	e = malloc(sizeof(struct event) + sz);
 	if (!e) {
 		fprintf(stderr, "Need more memory\n");
 		exit(1);
 	}
 
 	INIT_LIST_HEAD(&e->list);
-	strcpy((char*)e->name, event_spec);
+	memcpy((char*)e->name, event_spec, sz);
+	e->options = options;
 	list_add_tail(&e->list, &Enabled_event_list);
 	return 0;
 }
@@ -559,7 +588,7 @@ retry:
 	}
 	free(line);
 
-	skbtrace_enable("-*");
+	skbtrace_enable(NULL);
 	skbtrace_dropped_reset();
 	skbtrace_subbuf_setup();
 
@@ -577,8 +606,8 @@ retry:
 
 	list_for_each_entry(e, &Enabled_event_list, list) {
 		if (Verbose)
-			fprintf(stderr, "\t%s\n", (char*)e->name);
-		skbtrace_enable((char*)e->name);
+			fprintf(stderr, "\t%s %s\n", (char*)e->name, e->options ? : "");
+		skbtrace_enable(e);
 	}
 
 	if (!list_empty(&Enabled_event_list))
@@ -589,7 +618,7 @@ retry:
 		if (Event_list[i]) {
 			if (Verbose)
 				fprintf(stderr, "\t%s\n", Event_list[i]->d_name);
-			skbtrace_enable(Event_list[i]->d_name);
+			skbtrace_enable_default(Event_list[i]->d_name);
 		}
 	}
 quit:
@@ -602,7 +631,7 @@ static void disable_skbtrace(void)
 	unsigned long sc, si, hw;
 	long cpu;
 
-	skbtrace_enable("-*");
+	skbtrace_enable(NULL);
 	Tracing_stop = 1;
 	for (cpu = 0; cpu < Nr_cpus; cpu++) {
 		char *msg;
