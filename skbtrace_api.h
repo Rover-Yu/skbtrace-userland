@@ -90,7 +90,7 @@ struct skbtrace_block {
 	__u16 action;
 	__u32 flags;
 	struct timespec ts;
-	u64 seq;
+	__u64 seq;
 	void *ptr;
 } __packed;
 
@@ -134,7 +134,7 @@ enum {
 
 struct skbtrace_tcp_cong_blk {
 	struct skbtrace_block blk;
-	__u32	srtt;
+	__u32	rcv_rtt;
 	__u32	rto;
 	__u32	cwnd;
 	__u32	sndnxt;
@@ -167,12 +167,18 @@ enum {
 	skbtrace_tcp_sndlim_nagle	= 6,
 	skbtrace_tcp_sndlim_tso		= 7,
 	skbtrace_tcp_sndlim_frag	= 8,	/* most likely ENOMEM errors */
-	skbtrace_tcp_sndlim_other	= 9,
+	skbtrace_tcp_sndlim_pushone	= 9,
+	skbtrace_tcp_sndlim_other	= 10,
+	skbtrace_tcp_sndlim_ok		= 11,
 };
 
 struct skbtrace_tcp_sendlim_blk {
 	struct skbtrace_block blk;
-	int val;	/* the return value of tcp_transmit_skb() */
+	int val;	/* val :
+			 * 	skbtrace_tcp_sndlim_other: the return value of tcp_transmit_skb()
+			 * 	skbtrace_tcp_sndlim_ok: total sent pkts
+			 * 	other cases: send limit occurs under MTU probe if 1, otherwise, it is 0
+			 */
 	int count;
 	struct timespec begin;
 } __packed;
