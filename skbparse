@@ -181,7 +181,9 @@ tcp_sendlim_flags = {
 	6 :     ("nagle",		""),
 	7 :     ("tso",			""),
 	8 :     ("frag",		""),
-	9 :     ("other",		""),
+	9 :     ("pushone",		""),
+	10 :     ("other",		""),
+	11 :     ("ok",			""),
 }
 
 def context_data_desc(ptr, flags, data):
@@ -229,7 +231,12 @@ def tcp_sendlim_data_desc(ptr, flags, data):
 	val,cnt,sec,nsec = struct.unpack(fmt, data)
 	desc += " begin=%d.%d" % (sec, nsec)
 	desc += " cnt=%d" % cnt
-	desc += " val=%d" % val
+	if (1<<11) & flags:
+		desc += " sentpkts=%d" % val
+	elif (1<<10) & flags:
+		desc += " errcode=%d" % val
+	else:
+		desc += " mtuprobe=%d" % val
 	return desc
 
 def unknown_data_desc(ptr, flags, data):
