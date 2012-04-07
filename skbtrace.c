@@ -494,6 +494,9 @@ static int add_one_event(char *event_spec)
 	options = strchr(event_spec, ',');
 	if (options) {
 		*options = '\x0';
+		options++;
+		if ('\x0' == *options)
+			options = NULL;
 	}
 
 	list_for_each_entry(e, &Enabled_event_list, list) {
@@ -607,7 +610,11 @@ retry:
 	list_for_each_entry(e, &Enabled_event_list, list) {
 		if (Verbose)
 			fprintf(stderr, "\t%s %s\n", (char*)e->name, e->options ? : "");
-		skbtrace_enable(e);
+		if (!skbtrace_enable(e)) {
+			fprintf(stderr, "Failed to enable event '%s' with options '%s'\n",
+				       (char*)e->name, e->options ? : "");
+			exit(1);
+		}
 	}
 
 	if (!list_empty(&Enabled_event_list))
