@@ -66,7 +66,7 @@
 
 #define SKBTRACE_VERSION	"0.1.0"
 #define SKBTRACE_K_VERSION	"1"
-#define OPTSTRING		"r:D:w:b:n:c:C:e:F:fslvVh"
+#define OPTSTRING		"r:D:w:b:n:c:C:p:e:F:fslvVh"
 #define USAGE_STR \
 	"\t-r ARG Path to mounted debugfs, defaults to /sys/kernel/debug\n" \
 	"\t-D ARG Directory to prepend to output file names\n" \
@@ -76,7 +76,7 @@
 	"\t-c ARG Search path for configuration file skbtrace.conf, default is to enable all tracepoints\n" \
 	"\t-C CHANNEL_LIST Given channel list to specifiy what are channels which skbtrace can receive from\n" \
 	"\t\tCHANNEL_LIST\t\tAvailable channels are syscall, softirq, hardirq\n" \
-	"\t-p ARG Given a processors mask to specifiy what are processors which skbtrace can receive from\n" \
+	"\t-p PROCESSOR_LIST Given a processors list to specifiy what are processors which skbtrace can receive from\n" \
 	"\t-e EVENT[,OPTIONS_LIST] Specifiy an interesting trace event, this can be used multiple times\n" \
 	"\t\tEVENT\t\tOne of available trace events, please refer the output of -l option\n" \
 	"\t\tOPTIONS_LIST\tThe optional parameters of the trace event, the format is option1=val1,option2=val2,...\n" \
@@ -91,15 +91,14 @@ static char *Conf_pathlist = "./:/etc/skbtrace/";
 static char *Debugfs_path = "/sys/kernel/debug";
 static char *Output_path = "./skbtrace.results";
 static int Stop_timeout = 0;
-static long Nr_cpus;
+static long Nr_processors;
 static int Subbuf_size = SKBTRACE_DEF_SUBBUF_SIZE;
 static int Subbuf_nr = SKBTRACE_DEF_SUBBUF_NR;
 static int Overwrite_existed_results = O_EXCL;
 static int Verbose;
 static int On_stdout;
 static unsigned int Channels_mask= -1;	 /* receive data from all channels, default */
-/* TODO: replace Processors_mask with a bitmap */
-static unsigned long Processors_mask= -1; /* receive data from all processors, default */
+static int *Processors_mask;
 static pthread_spinlock_t Stdout_lock;
 static pthread_mutex_t Done_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -355,9 +354,34 @@ static int handle_channel_arg(char *channels_list)
 	return 0;
 }
 
+static int handle_processor_arg(char *processors_list)
+{
+	char *cur;
+	int start, end;
+
+	cur = strsep(&processors_list, ",");
+	while (cur) {
+		int n = sscanf(cur, "%d-%d", &start, &end);
+		if (n <= 0)
+			return -EINVAL;
+		if (start >= Nr_processors || start < 0)
+			return -EINVAL;
+		if (1 == n)
+			end = start;
+		else if (end >= Nr_processors || end < 0 || end < start)
+			return -EINVAL;
+		for (; start <= end; start++)
+			Processors_mask[start] = 1;
+		cur = strsep(&processors_list, ",");
+	}
+	return 0;
+}
+
+
 static void handle_args(int argc, char *argv[])
 {
 	int opt;
+	int has_p = 0;
 
 	while ((opt = getopt(argc, argv, OPTSTRING)) != -1) {
 	switch (opt) {
@@ -397,11 +421,11 @@ static void handle_args(int argc, char *argv[])
 		}
 		break;
 	case 'p':
-		Processors_mask = atoi(optarg);
-		if (!Processors_mask) {
-			fprintf(stderr, "Invalid procsessors mask\n");
+		if (handle_processor_arg(optarg)) {
+			fprintf(stderr, "Invalid processors list\n");
 			exit(1);
 		}
+		has_p = 1;
 		break;
 	case 'r':
 		Debugfs_path = optarg;
@@ -426,6 +450,13 @@ static void handle_args(int argc, char *argv[])
 		Subbuf_nr = atoi(optarg);
 		break;
 	}
+	}
+
+	if (!has_p) {
+		int i;
+
+		for (i=0; i<Nr_processors; i++)
+			Processors_mask[i] = 1;
 	}
 
 	if (optind < argc) {
@@ -660,7 +691,7 @@ static void disable_skbtrace(void)
 
 	skbtrace_enable(NULL);
 	Tracing_stop = 1;
-	for (cpu = 0; cpu < Nr_cpus; cpu++) {
+	for (cpu = 0; cpu < Nr_processors; cpu++) {
 		char *msg;
 
 		pthread_join(Tracing_threads[cpu], (void**)&msg);
@@ -733,7 +764,7 @@ static void* __setup_tracing_fd(char *prefix, char *fn, long cpu,
 	int flags;
 	mode_t mode;
 
-	if (!(Processors_mask & (1<<cpu))) {
+	if (!Processors_mask[cpu]) {
 		fd[idx] = -1;
 		return NULL;
 	}
@@ -993,14 +1024,8 @@ static void start_tracing(void)
 		return;
 
         setlocale(LC_NUMERIC, "en_US");
-        Nr_cpus = sysconf(_SC_NPROCESSORS_ONLN);
-        if (Nr_cpus < 0) {
-                fprintf(stderr, "sysconf(_SC_NPROCESSORS_ONLN) failed %d/%s\n",
-                        errno, strerror(errno));
-                return;
-        }
 
-	Tracing_threads = malloc(sizeof(pthread_t) * Nr_cpus);
+	Tracing_threads = malloc(sizeof(pthread_t) * Nr_processors);
 	if (!Tracing_threads) {
 		fprintf(stderr, "Need more memory\n");
 		return;
@@ -1014,7 +1039,7 @@ static void start_tracing(void)
 
 	enable_skbtrace();
 
-	for (cpu = 0; cpu < Nr_cpus; cpu++) {
+	for (cpu = 0; cpu < Nr_processors; cpu++) {
 		if (pthread_create(Tracing_threads+cpu, NULL, tracing, (void*)cpu))
 			break;
 	}
@@ -1028,8 +1053,28 @@ static void start_tracing(void)
 	pthread_mutex_lock(&Done_lock);
 }
 
+static void processors_mask_init(void)
+{
+	int i;
+
+        Nr_processors = sysconf(_SC_NPROCESSORS_ONLN);
+        if (Nr_processors < 0) {
+                fprintf(stderr, "sysconf(_SC_NPROCESSORS_ONLN) failed %d/%s\n",
+                        errno, strerror(errno));
+		exit(1);
+        }
+	Processors_mask = malloc(sizeof(int)*Nr_processors);
+	if (!Processors_mask) {
+                fprintf(stderr, "need more memory\n");
+		exit(1);
+	}
+	for (i=0; i<Nr_processors; i++)
+		Processors_mask[i] = 0;
+}
+
 int main(int argc, char *argv[])
 {
+	processors_mask_init();
 	handle_args(argc, argv);
 	check_debugfs();
 	load_available_events();
