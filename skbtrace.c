@@ -74,7 +74,8 @@
 	"\t-b ARG Sub buffer size in bytes\n" \
 	"\t-n ARG Number of sub buffers\n" \
 	"\t-c ARG Search path for configuration file skbtrace.conf, default is to enable all tracepoints\n" \
-	"\t-C ARG Given a channel mask to specifiy what are channels which skbtrace can receive from\n" \
+	"\t-C CHANNEL_LIST Given channel list to specifiy what are channels which skbtrace can receive from\n" \
+	"\t\tCHANNEL_LIST\t\tAvailable channels are syscall, softirq, hardirq\n" \
 	"\t-p ARG Given a processors mask to specifiy what are processors which skbtrace can receive from\n" \
 	"\t-e EVENT[,OPTIONS_LIST] Specifiy an interesting trace event, this can be used multiple times\n" \
 	"\t\tEVENT\t\tOne of available trace events, please refer the output of -l option\n" \
@@ -334,6 +335,26 @@ static void show_skbtrace_events(void)
 	exit(0);
 }
 
+static int handle_channel_arg(char *channels_list)
+{
+	char *cur;
+
+	Channels_mask = 0;
+	cur = strsep(&channels_list, ",");
+	while (cur) {
+		if (!strcmp("syscall", cur))
+			Channels_mask |= (1<<SC);
+		else if (!strcmp("softirq", cur))
+			Channels_mask |= (1<<SI);
+		else if (!strcmp("hardirq", cur))
+			Channels_mask |= (1<<HW);
+		else
+			return -EINVAL;
+		cur = strsep(&channels_list, ",");
+	}
+	return 0;
+}
+
 static void handle_args(int argc, char *argv[])
 {
 	int opt;
@@ -370,8 +391,7 @@ static void handle_args(int argc, char *argv[])
 		Conf_pathlist = optarg;
 		break;
 	case 'C':
-		Channels_mask = atoi(optarg);
-		if (!Channels_mask) {
+		if (handle_channel_arg(optarg)) {
 			fprintf(stderr, "Invalid channels mask\n");
 			exit(1);
 		}
