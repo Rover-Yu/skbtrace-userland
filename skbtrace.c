@@ -316,21 +316,11 @@ static void check_debugfs(void)
 	free(skbtrace_path);
 }
 
-
-static void show_available_channels(void)
-{
-	fprintf(stderr, "Available channels:\n");
-	fprintf(stderr, "\tSyscall mask=%x\n", 1<<SC);
-	fprintf(stderr, "\tSoftirq mask=%x\n", 1<<SI);
-	fprintf(stderr, "\tHardirq mask=%x\n", 1<<HW);
-}
-
 static void show_skbtrace_events(void)
 {
 	check_debugfs();
 	load_available_events();
 	show_available_events();
-	show_available_channels();
 	exit(0);
 }
 
@@ -416,7 +406,7 @@ static void handle_args(int argc, char *argv[])
 		break;
 	case 'C':
 		if (handle_channel_arg(optarg)) {
-			fprintf(stderr, "Invalid channels mask\n");
+			fprintf(stderr, "Invalid channels list\n");
 			exit(1);
 		}
 		break;
