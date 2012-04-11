@@ -102,6 +102,12 @@ def handle_args(args):
 			value = True
 		callback(Conf_table, conf_name, value)
 
+channel_table = {
+	0 : "syscall",
+	1 : "softirq",
+	2 : "hardirq",
+}
+
 af_table = {
 	0        : "AF_UNSPEC",
 	1	 : "AF_UNIX",
@@ -261,7 +267,7 @@ def get_long_size():
 		return 4
 Size_long = get_long_size()
 
-def parse_skbtrace_header(ifile, ofile, cpu, hdr):
+def parse_skbtrace_header(ifile, ofile, cpu, channel, hdr):
 	global Action_table
 	hdr_fmt = "HHILLPL"
 	hdr_size = 2 + 2 + 4 + Size_long * 3 + 8
@@ -284,6 +290,7 @@ def parse_skbtrace_header(ifile, ofile, cpu, hdr):
 	ofile.write("%ld " % seq)
 	ofile.write("%d.%d " % (sec, nsec))
 	ofile.write("cpu=%s " % cpu)
+	ofile.write("channel=%s " % channel)
 	ofile.write("action=%s " % action_str)
 	ofile.write(" " + flags_desc)
 
@@ -332,20 +339,21 @@ def open_file(fn, mode):
 def do_stdin_skbparse():
 	trace = sys.stdin
 	parse = sys.stdout
-	cpu_pktlen_fmt = "LL"
-	cpu_pktlen_size = Size_long * 2
+	metadata_fmt = "LLL"
+	metadata_size = Size_long * 3 # cpu, channel-id, data-length-in-bytes
 	hdr_fmt = "HHILLPL"
 	hdr_size = 2 + 2 + 4 + Size_long * 3 + 8
 
-	binary = trace.read(cpu_pktlen_size)
+	binary = trace.read(metadata_size)
 	while binary:
-		cpu, pktlen = struct.unpack(cpu_pktlen_fmt, binary)
+		cpu, channel, pktlen = struct.unpack(metadata_fmt, binary)
+		channel = channel_table.get(channel, "unknown")
 		done = 0
 		while done < pktlen:
 			binary = trace.read(hdr_size)
-			trace_size = parse_skbtrace_header(trace, parse, cpu, binary)
+			trace_size = parse_skbtrace_header(trace, parse, cpu, channel, binary)
 			done += trace_size
-		binary = trace.read(cpu_pktlen_size)
+		binary = trace.read(metadata_size)
 
 def do_skbparse(ifn = "", ofn = ""):
 	try:
@@ -353,7 +361,8 @@ def do_skbparse(ifn = "", ofn = ""):
 			trace = parse = None
 			if not ifn:
 				return do_stdin_skbparse()
-			reg = re.compile(".*trace.*\.cpu(?P<cpu>[0-9]+)")
+			reg = re.compile(".*trace\.(?P<channel>((hardirq)|(softirq)|(syscall)))\.cpu(?P<cpu>[0-9]+)")
+			channel = reg.match(ifn).groupdict()["channel"]
 			cpu = reg.match(ifn).groupdict()["cpu"]
 			trace = open_file(ifn, "r")
 			if ofn:
@@ -364,7 +373,7 @@ def do_skbparse(ifn = "", ofn = ""):
 			hdr_size = 2 + 2 + 4 + size_long * 3 + 8
 			binary = trace.read(hdr_size)
 			while binary:
-				parse_skbtrace_header(trace, parse, cpu, binary)
+				parse_skbtrace_header(trace, parse, cpu, channel, binary)
 				binary = trace.read(hdr_size)
 		except KeyboardInterrupt:
 			trace and trace.close()

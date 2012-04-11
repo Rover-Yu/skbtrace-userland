@@ -793,6 +793,7 @@ typedef struct {
 	int ifd, ofd;
 	void *buf;
 	ssize_t size;
+	long channel;
 } tracing_t;
 
 static void* do_tracing_targeted_file(int epfd, long cpu)
@@ -872,6 +873,7 @@ if (Verbose > 1 && nr_events) {
 				if (done > 0) {
 					pthread_spin_lock(&Stdout_lock);
 					write(STDOUT_FILENO, &cpu, sizeof(long));
+					write(STDOUT_FILENO, &tracing->channel, sizeof(long));
 					write(STDOUT_FILENO, &done, sizeof(ssize_t));
 					write(STDOUT_FILENO, buf, done);
 					pthread_spin_unlock(&Stdout_lock);
@@ -913,6 +915,7 @@ static void* do_tracing(long cpu, int fd[NR_CHANNELS*2])
 		tracing_array[i].ofd = fd[i + NR_CHANNELS];
 		tracing_array[i].buf = NULL;
 		tracing_array[i].size = 0UL;
+		tracing_array[i].channel = i;
 		event.events = EPOLLIN|EPOLLET;
 		event.data.ptr = (void*)(&tracing_array[i]);
 		if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd[i], &event) < 0)
