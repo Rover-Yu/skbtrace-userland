@@ -101,12 +101,16 @@ static unsigned int Channels_mask= -1;	 /* receive data from all channels, defau
 static int *Processors_mask;
 static pthread_spinlock_t Stdout_lock;
 static pthread_mutex_t Done_lock = PTHREAD_MUTEX_INITIALIZER;
-
-static struct dirent **Event_list;
-static int Event_list_number;
-
 static int Tracing_stop;
 static pthread_t *Tracing_threads;
+
+struct available_event {
+	char *name;
+	char *options;
+	struct available_event *next;
+};
+
+static struct available_event *Available_events;
 
 static LIST_HEAD(Enabled_filter_list);
 struct filter {
@@ -232,48 +236,53 @@ static char *append_one_line(const char *dir, const char *fn, char *line)
 }
 
 /* This assumes that we enabled trace events support in kernel */
-static void load_available_events(void)
+static int load_available_events(void)
 {
-	char *skbtrace_path;
-	int n;
-	char* blacklist[] = {".", "..", "filter", "enable"};
+	char *line = NULL, *end;
+	FILE * fp = NULL;
+	size_t len = 0;
 
-	skbtrace_path = malloc(strlen(Debugfs_path) + \
-					sizeof(SKBTRACE_FTRACE_PATH));
-	if (!skbtrace_path) {
-		fprintf(stderr, "Allocating memory failed\n");
-		exit(1);
-	}
-	sprintf(skbtrace_path, "%s" SKBTRACE_FTRACE_PATH, Debugfs_path);
+	Available_events = NULL;
 
-	Event_list_number = scandir(skbtrace_path, &Event_list, NULL, NULL);
-	free(skbtrace_path);
+	while (read_one_line(Debugfs_path, SKBTRACE_ENABLED_PATH, &fp, &line, &len)) {
+		struct available_event *e;
 
-	n = Event_list_number;
-	while (n--) {
-		size_t i;
-		
-		if (!Event_list[n])
+		e = malloc(sizeof(struct available_event));
+		if (!e)
+			return -ENOMEM;
+		end = strchr(line, ' ');
+		if (!end)
 			continue;
-		for (i = 0; i < sizeof(blacklist)/sizeof(char*); i++) {
-			if (!strcmp(Event_list[n]->d_name, blacklist[i])) {
-				free(Event_list[n]);
-				Event_list[n] = NULL;
-				break;
-			}
-		}
+		*end = '\x0';
+		end = strchr(++end, ' '); /* skip "enabled:X " */
+		if (end)
+			end++;
+		e->name = strdup(line);
+		if (end)
+			e->options = strdup(end);
+		else
+			e->options = "none";
+		e->next = Available_events;
+		Available_events = e;
+		if (!e->name)
+			return -ENOMEM;
 	}
+	if (line)
+		free(line);
+	return 0;
 }
 
 static void show_available_events(void)
 {
-	int n;
+	struct available_event *avail_e;
 
-	fprintf(stderr, "Available events:\n");
-	n = Event_list_number;
-	while (n--) {
-		if (Event_list[n])
-			fprintf(stderr, "\t%s\n", Event_list[n]->d_name);
+	fprintf(stderr, "Available events and options:\n");
+	avail_e = Available_events;
+	while (avail_e) {
+		fprintf(stderr, "\t%s\n", avail_e->name);
+		fprintf(stderr, "\t\tOptions: %s\n",
+			avail_e->options);
+		avail_e = avail_e->next;
 	}
 }
 
@@ -314,12 +323,16 @@ static void check_debugfs(void)
 	}
 
 	free(skbtrace_path);
+
+	if (load_available_events()) {
+		fprintf(stderr, "Failed to load available events\n");
+		exit(1);
+	}
 }
 
 static void show_skbtrace_events(void)
 {
 	check_debugfs();
-	load_available_events();
 	show_available_events();
 	exit(0);
 }
@@ -471,14 +484,13 @@ static void handle_args(int argc, char *argv[])
 
 static int is_available_event(const char *event_name)
 {
-	int n;
+	struct available_event *avail_e;
 
-	n = Event_list_number;
-	while (n--) {
-		if (!Event_list[n])
-			continue;
-		if (!strcmp(Event_list[n]->d_name, event_name))
+	avail_e = Available_events;
+	while (avail_e) {
+		if (!strcmp(avail_e->name, event_name))
 			return 1;
+		avail_e = avail_e->next;
 	}
 	return 0;
 }
@@ -611,6 +623,7 @@ static void skbtrace_subbuf_setup(void)
 static void enable_skbtrace(void)
 {
 	char *line;
+	struct available_event *avail_e;
 	struct event *e;
 	struct filter *f;
 	int i;
@@ -652,7 +665,7 @@ retry:
 		if (Verbose)
 			fprintf(stderr, "\t%s %s\n", (char*)e->name, e->options ? : "");
 		if (!skbtrace_enable(e)) {
-			fprintf(stderr, "Failed to enable event '%s' with options '%s'\n",
+			fprintf(stderr, "Failed to enable event '%s' with option(s) '%s', use -l option list available events\n",
 				       (char*)e->name, e->options ? : "");
 			exit(1);
 		}
@@ -661,13 +674,12 @@ retry:
 	if (!list_empty(&Enabled_event_list))
 		goto quit;
 
-	i = Event_list_number;
-	while (i--) {
-		if (Event_list[i]) {
-			if (Verbose)
-				fprintf(stderr, "\t%s\n", Event_list[i]->d_name);
-			skbtrace_enable_default(Event_list[i]->d_name);
-		}
+	avail_e = Available_events;
+	while (avail_e) {
+		if (Verbose)
+			fprintf(stderr, "\t%s\n", avail_e->name);
+		skbtrace_enable_default(avail_e->name);
+		avail_e = avail_e->next;
 	}
 quit:
 	pthread_mutex_lock(&Done_lock);
@@ -1067,7 +1079,6 @@ int main(int argc, char *argv[])
 	processors_mask_init();
 	handle_args(argc, argv);
 	check_debugfs();
-	load_available_events();
 	load_conf();
 
 	start_tracing();
