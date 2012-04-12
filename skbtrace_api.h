@@ -58,8 +58,6 @@
 /* skbtrace_block->action */
 enum {
 	skbtrace_action_common_min	= 1,
-	skbtrace_action_context		= 1,
-	skbtrace_action_drop		= 2,
 	skbtrace_action_common_max	= 99,
 
 };
@@ -72,11 +70,6 @@ enum {
 	skbtrace_flags_reserved_2 = 2,
 	skbtrace_flags_reserved_3 = 3,
 	skbtrace_flags_reserved_max = 3,
-};
-
-/* skbtrace_block->flags for skb_context */
-enum {
-	skbtrace_context_tx = 4,	/* outbound or inbound */
 };
 
 /* struct skbtrace_block - be used in kernel/user interaction */
@@ -92,21 +85,6 @@ struct skbtrace_block {
 	struct timespec ts;
 	__u64 seq;
 	void *ptr;
-} __packed;
-
-#define SKBTRACE_DROP_DESC_SZ	16
-struct skbtrace_drop_blk {
-	struct skbtrace_block blk;
-	void *ip;
-	char desc[SKBTRACE_DROP_DESC_SZ];
-} __packed;
-
-struct skbtrace_context_blk {
-	struct skbtrace_block blk;
-	pid_t pid;	/* FIXME: namespace support */
-	pid_t tid;
-	void *sk;
-	char comm[TASK_COMM_LEN];
 } __packed;
 
 /********************* TCP section *********************/
