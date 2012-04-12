@@ -52,7 +52,6 @@
 #define DEBUGFS_TYPE		(0x64626720)
 
 #define SKBTRACE_CONF		"/skbtrace.conf"
-#define SKBTRACE_FTRACE_PATH	"/tracing/events/skbtrace"
 #define SKBTRACE_ENABLED_PATH	"/skbtrace/enabled"
 #define SKBTRACE_FILTERS_PATH	"/skbtrace/filters"
 #define SKBTRACE_VERSION_PATH	"/skbtrace/version"
@@ -301,28 +300,11 @@ static void show_usage(char *argv[])
 static void check_debugfs(void)
 {
 	struct statfs stfs;
-	struct stat st;
-	char *skbtrace_path;
 
 	if (statfs(Debugfs_path, &stfs) < 0 || stfs.f_type != (long)DEBUGFS_TYPE) {
 		fprintf(stderr, "Invalid debug path %s\n", Debugfs_path);
 		exit(1);
 	}
-
-	skbtrace_path = malloc(strlen(Debugfs_path) + 
-					sizeof(SKBTRACE_FTRACE_PATH));
-	if (!skbtrace_path) {
-		fprintf(stderr, "Need more memory.\n");
-		exit(1);
-	}
-	sprintf(skbtrace_path, "%s" SKBTRACE_FTRACE_PATH, Debugfs_path);
-
-	if (stat(skbtrace_path, &st) < 0) {
-		fprintf(stderr, "Invalid skbtrace path %s\n", skbtrace_path);
-		exit(1);
-	}
-
-	free(skbtrace_path);
 
 	if (load_available_events()) {
 		fprintf(stderr, "Failed to load available events\n");
