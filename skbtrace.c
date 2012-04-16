@@ -257,14 +257,16 @@ static int load_available_events(void)
 		if (end)
 			end++;
 		e->name = strdup(line);
-		if (end)
+		if (!e->name)
+			return -ENOMEM;
+		if (end) {
 			e->options = strdup(end);
-		else
+			if (!e->options)
+				return -ENOMEM;
+		} else
 			e->options = "none";
 		e->next = Available_events;
 		Available_events = e;
-		if (!e->name)
-			return -ENOMEM;
 	}
 	if (line)
 		free(line);
@@ -608,23 +610,15 @@ static void enable_skbtrace(void)
 	struct available_event *avail_e;
 	struct event *e;
 	struct filter *f;
-	int i;
 
-	i = 0;
-
-retry:
 	line = skbtrace_version();
 	if (!line || strcmp(line, SKBTRACE_K_VERSION)) {
 		if (line)
 			free(line);
-		if (i > 0) {
-			fprintf(stderr, "Requires skbtrace kernel API version " SKBTRACE_K_VERSION "\n");
-			exit(1);
-		}
-		system("/sbin/modprobe skbtrace");
-		i++;
-		goto retry;
+		fprintf(stderr, "Requires skbtrace kernel API version " SKBTRACE_K_VERSION "\n");
+		exit(1);
 	}
+
 	free(line);
 
 	skbtrace_enable(NULL);
@@ -1058,6 +1052,7 @@ static void processors_mask_init(void)
 
 int main(int argc, char *argv[])
 {
+	system("/sbin/modprobe skbtrace");
 	processors_mask_init();
 	handle_args(argc, argv);
 	check_debugfs();
