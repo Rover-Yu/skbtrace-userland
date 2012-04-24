@@ -158,6 +158,10 @@ taskctx_flags = {
 	4 :	("tx",			"rx"),
 }
 
+icsk_conn_flags = {
+	13 : ("LISTEN",		""),
+}
+
 tcp_conn_flags = {
 	4  : ("ESTABLISHED",	""),
 	5  : ("SYN_SENT",	""),
@@ -168,7 +172,6 @@ tcp_conn_flags = {
 	10 : ("CLOSE",		""),
 	11 : ("CLOSE_WAIT",	""),
 	12 : ("LAST_ACK",	""),
-	13 : ("LISTEN",		""),
 }
 
 tcp_cong_flags = {
@@ -221,6 +224,13 @@ def tcp_cong_data_desc(ptr, flags, data):
 	desc += " snduna=%d" % snduna
 	return desc
 
+def icsk_conn_data_desc(ptr, flags, data):
+	desc  = "sock=0x%x" % ptr
+	local, size = parse_sockaddr(data)
+	if size:
+		desc += " local=%s:%d" % (local[0], local[1])
+	return desc
+
 def tcp_conn_data_desc(ptr, flags, data):
 	desc  = "sock=0x%x" % ptr
 	local, size = parse_sockaddr(data)
@@ -257,6 +267,8 @@ Action_table = {
 	101 :		("tcp_cong",	tcp_cong_flags,		{},		tcp_cong_data_desc),
 	102 :		("tcp_conn",	tcp_conn_flags,		{},		tcp_conn_data_desc),
 	103 :		("tcp_sendlim",	tcp_sendlim_flags,	{},		tcp_sendlim_data_desc),
+########ICSK##########
+	201 :		("icsk_conn",	icsk_conn_flags,	{},		icsk_conn_data_desc),
 }
 
 def get_long_size():
