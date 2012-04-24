@@ -36,8 +36,8 @@
 #define __packed	__attribute__ ((__packed__))
 #endif
 
-#define TRACE_NAME_MAX_LEN	256
-#define FILTER_NAME_MAX_LEN	256
+#define TRACE_SPEC_MAX_LEN	256
+#define FILTER_SPEC_MAX_LEN	256
 
 #define SKBTRACE_DEF_SUBBUF_SIZE	(1<<7)
 #define SKBTRACE_DEF_SUBBUF_NR	(1<<11)
@@ -92,7 +92,7 @@ struct skbtrace_block {
 /* skbtrace_block->action */
 enum {
 	skbtrace_action_tcp_min		= 101,
-	skbtrace_action_tcp_congnestion = 101,
+	skbtrace_action_tcp_congestion	= 101,
 	skbtrace_action_tcp_connection	= 102,
 	skbtrace_action_tcp_sendlimit	= 103,
 	skbtrace_action_tcp_max		= 199,
@@ -160,5 +160,16 @@ struct skbtrace_tcp_sendlim_blk {
 	int count;
 	struct timespec begin;
 } __packed;
+
+/********************* icsk section *********************/
+
+/* skbtrace_block->action */
+enum {
+	skbtrace_action_icsk_min	= 201,
+	skbtrace_action_icsk_connection	= 201,
+	skbtrace_action_icsk_max	= 299,
+};
+
+/* Use skbtrace_tcp_conn_blk */
 
 #endif
