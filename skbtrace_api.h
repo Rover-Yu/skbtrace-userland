@@ -30,6 +30,7 @@
 #include <linux/sched.h>
 #include <linux/in.h>
 #include <linux/in6.h>
+#include <net/flow_keys.h>
 #else
 #include <time.h>
 #define TASK_COMM_LEN	16
@@ -58,13 +59,13 @@
 /* skbtrace_block->action */
 enum {
 	skbtrace_action_common_min	= 1,
+	skbtrace_action_skb_rps_info	= 1,
 	skbtrace_action_common_max	= 99,
-
 };
 
 /* common skbtrace_block->flags */
 enum {
-	skbtrace_flags_reserved_min = 3,
+	skbtrace_flags_reserved_min = 0,
 	skbtrace_flags_reserved_0 = 0,
 	skbtrace_flags_reserved_1 = 1,
 	skbtrace_flags_reserved_2 = 2,
@@ -85,6 +86,16 @@ struct skbtrace_block {
 	struct timespec ts;
 	__u64 seq;
 	void *ptr;
+} __packed;
+
+/********************* common section ******************/
+struct skbtrace_skb_rps_info_blk {
+	struct skbtrace_block blk;
+	__u16 rx_queue;
+	__u32 rx_hash;
+	__u32 cpu;
+	__u32 ifindex;
+	struct flow_keys keys;
 } __packed;
 
 /********************* TCP section *********************/
@@ -152,13 +163,21 @@ enum {
 
 struct skbtrace_tcp_sendlim_blk {
 	struct skbtrace_block blk;
-	int val;	/* val :
+	__u32 val;	/* val :
 			 * 	skbtrace_tcp_sndlim_other: the return value of tcp_transmit_skb()
 			 * 	skbtrace_tcp_sndlim_ok: total sent pkts
 			 * 	other cases: send limit occurs under MTU probe if 1, otherwise, it is 0
 			 */
-	int count;
+	__u32 count;
 	struct timespec begin;
+	union {
+		struct {
+			__u32	snd_ssthresh;
+			__u32	snd_cwnd;
+			__u32	snd_cwnd_cnt;
+		};
+		__u32	snd_wnd;
+	};
 } __packed;
 
 /********************* icsk section *********************/
