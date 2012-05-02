@@ -195,22 +195,21 @@ tcp_sendlim_flags = {
 	11 :     ("ok",			""),
 }
 
-def context_data_desc(ptr, flags, data):
-	fmt = "IIL16s"
-	pid, tid, sk, comm = struct.unpack(fmt, data)
-	desc  = "skb=0x%x" % ptr
-	desc += " task=%s" % comm.replace("\x00", "")
-	desc += " pid=%d" % pid
-	desc += " tid=%d" % tid
-	desc += " sock=0x%x" % sk
-	return desc
-
-def drop_data_desc(ptr, flags, data):
-	fmt = "L16s"
-	loc, s = struct.unpack("L16s", data)
-	desc  = "skb=0x%x" % ptr
-	desc += " loc=0x%x" % loc
-	desc += " desc=%s" % s.replace("\x00", "")
+def rps_info_data_desc(ptr, flags, data):
+	queue_fmt = "H"
+	rest_fmt = "IIIIIHHB"
+	rx_queue = struct.unpack(queue_fmt, data[0:2])
+	rx_hash, cpu, ifindex, src, dst, sport, dport, proto = struct.unpack(rest_fmt, data[2:])
+	desc = "skb=0x%x" % ptr
+	desc += " rx-queue=%d" % rx_queue
+	desc += " rx-hash=%x" % rx_hash
+	desc += " cpu=%d" % cpu
+	desc += " ifindex=%d" % ifindex
+	desc += " src=%x" % src
+	desc += " dst=%x" % dst
+	desc += " sport=%d" % sport
+	desc += " dport=%d" % dport
+	desc += " proto=%d" % proto
 	return desc
 
 def tcp_cong_data_desc(ptr, flags, data):
@@ -265,8 +264,7 @@ def unknown_data_desc(ptr, flags, data):
 Action_table = {
 #	action :	(action_desc,	flags_table,		seq_table,	data_desc),
 ########Common########
-	1   :		("context",	taskctx_flags,		{},		context_data_desc),
-	2   :		("drop",	{},			{},		drop_data_desc),
+	1   :		("rps_info",	{},			{},		rps_info_data_desc),
 ########TCP##########
 	101 :		("tcp_cong",	tcp_cong_flags,		{},		tcp_cong_data_desc),
 	102 :		("tcp_conn",	tcp_conn_flags,		{},		tcp_conn_data_desc),
