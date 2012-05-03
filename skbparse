@@ -196,20 +196,20 @@ tcp_sendlim_flags = {
 }
 
 def rps_info_data_desc(ptr, flags, data):
-	queue_fmt = "H"
-	rest_fmt = "IIIIIHHB"
-	rx_queue = struct.unpack(queue_fmt, data[0:2])
-	rx_hash, cpu, ifindex, src, dst, sport, dport, proto = struct.unpack(rest_fmt, data[2:])
+	queue_fmt = "Hxx"
+	rest_fmt = "IIIIIHHBxxx"
+	rx_queue = struct.unpack(queue_fmt, data[0:4])
+	rx_hash, cpu, ifindex, src, dst, sport, dport, proto = struct.unpack(rest_fmt, data[4:])
 	desc = "skb=0x%x" % ptr
 	desc += " rx-queue=%d" % rx_queue
-	desc += " rx-hash=%x" % rx_hash
-	desc += " cpu=%d" % cpu
+	desc += " rx-hash=0x%x" % rx_hash
+	desc += " cpu=0x%x" % cpu
 	desc += " ifindex=%d" % ifindex
-	desc += " src=%x" % src
-	desc += " dst=%x" % dst
+	desc += " src=0x%x" % src
+	desc += " dst=0x%x" % dst
 	desc += " sport=%d" % sport
 	desc += " dport=%d" % dport
-	desc += " proto=%d" % proto
+	desc += " proto=0x%x" % proto
 	return desc
 
 def tcp_cong_data_desc(ptr, flags, data):
