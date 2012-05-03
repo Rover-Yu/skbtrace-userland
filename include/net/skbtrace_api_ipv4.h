@@ -20,83 +20,15 @@
  * 2012 Li Yu <bingtian.ly@taobao.com>
  *
  */
-#ifndef _LINUX_SKBTRACE_API_H
-#define _LINUX_SKBTRACE_API_H
+#ifndef _NET_SKBTRACE_API_IPV4_H
+#define _NET_SKBTRACE_API_IPV4_H
 
 #include <asm/types.h>
 
 #ifdef __KERNEL__
-#include <linux/time.h>
-#include <linux/sched.h>
 #include <linux/in.h>
 #include <linux/in6.h>
-#include <net/flow_keys.h>
-#else
-#include <time.h>
-#define TASK_COMM_LEN	16
-#define __packed	__attribute__ ((__packed__))
 #endif
-
-#define TRACE_SPEC_MAX_LEN	256
-#define FILTER_SPEC_MAX_LEN	256
-
-#define SKBTRACE_DEF_SUBBUF_SIZE	(1<<7)
-#define SKBTRACE_DEF_SUBBUF_NR	(1<<11)
-
-#define SKBTRACE_MIN_SUBBUF_SIZE	SKBTRACE_DEF_SUBBUF_SIZE
-#define SKBTRACE_MIN_SUBBUF_NR		SKBTRACE_DEF_SUBBUF_NR
-
-#define SKBTRACE_MAX_SUBBUF_SIZE	(1<<12)
-#define SKBTRACE_MAX_SUBBUF_NR		(1<<20)
-
-#define SC	0	/* for tracepoints in othersides, e.g. syscall */
-#define SI	1	/* for tracepoints in softirq */
-#define HW	2	/* for tracepoints in hardware IRQ */
-#define NR_CHANNELS	3
-
-/********************* Common section *********************/
-
-/* skbtrace_block->action */
-enum {
-	skbtrace_action_common_min	= 1,
-	skbtrace_action_skb_rps_info	= 1,
-	skbtrace_action_common_max	= 99,
-};
-
-/* common skbtrace_block->flags */
-enum {
-	skbtrace_flags_reserved_min = 0,
-	skbtrace_flags_reserved_0 = 0,
-	skbtrace_flags_reserved_1 = 1,
-	skbtrace_flags_reserved_2 = 2,
-	skbtrace_flags_reserved_3 = 3,
-	skbtrace_flags_reserved_max = 3,
-};
-
-/* struct skbtrace_block - be used in kernel/user interaction */
-/* @len:	whole data structure size in bytes */
-/* @action:	action of this skbtrace_block */
-/* @flags:	the flags depend on above action field */
-/* @ts:		the timestamp of this event. */
-/* @ptr:	the major source kernel data structure of this event, for gerneral, a sk_buff or sock */
-struct skbtrace_block {
-	__u16 len;
-	__u16 action;
-	__u32 flags;
-	struct timespec ts;
-	__u64 seq;
-	void *ptr;
-} __packed;
-
-/********************* common section ******************/
-struct skbtrace_skb_rps_info_blk {
-	struct skbtrace_block blk;
-	__u16 rx_queue;
-	__u32 rx_hash;
-	__u32 cpu;
-	__u32 ifindex;
-	struct flow_keys keys;
-} __packed;
 
 /********************* TCP section *********************/
 
@@ -109,7 +41,7 @@ enum {
 	skbtrace_action_tcp_max		= 199,
 };
 
-/* TCP congestion event (100) */
+/* TCP congestion event (101) */
 
 /* flags */
 enum {

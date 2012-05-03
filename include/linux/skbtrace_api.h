@@ -1,0 +1,72 @@
+/*
+ *  skbtrace - sk_buff trace utilty
+ *
+ * 	User/Kernel Interface
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ * 2012 Li Yu <bingtian.ly@taobao.com>
+ *
+ */
+#ifndef _LINUX_SKBTRACE_API_H
+#define _LINUX_SKBTRACE_API_H
+
+#include <asm/types.h>
+
+#ifdef __KERNEL__
+#include <linux/time.h>
+#else
+#include <time.h>
+#define TASK_COMM_LEN	16
+#define __packed	__attribute__ ((__packed__))
+#endif
+
+#define TRACE_SPEC_MAX_LEN	256
+#define FILTER_SPEC_MAX_LEN	256
+
+#define SKBTRACE_DEF_SUBBUF_SIZE	(1<<7)
+#define SKBTRACE_DEF_SUBBUF_NR	(1<<11)
+
+#define SKBTRACE_MIN_SUBBUF_SIZE	SKBTRACE_DEF_SUBBUF_SIZE
+#define SKBTRACE_MIN_SUBBUF_NR		SKBTRACE_DEF_SUBBUF_NR
+
+#define SKBTRACE_MAX_SUBBUF_SIZE	(1<<12)
+#define SKBTRACE_MAX_SUBBUF_NR		(1<<20)
+
+#define SC	0	/* for tracepoints in othersides, e.g. syscall */
+#define SI	1	/* for tracepoints in softirq */
+#define HW	2	/* for tracepoints in hardware IRQ */
+#define NR_CHANNELS	3
+
+/* struct skbtrace_block - be used in kernel/user interaction */
+/* @len:	whole data structure size in bytes */
+/* @action:	action of this skbtrace_block */
+/* @flags:	the flags depend on above action field */
+/* @ts:		the timestamp of this event. */
+/* @ptr:	the major source kernel data structure of this event, for gerneral, a sk_buff or sock */
+/* Keep 32bits alignments, please */
+struct skbtrace_block {
+	__u16 len;
+	__u16 action;
+	__u32 flags;
+	struct timespec ts;
+	__u64 seq;
+	void *ptr;
+} __packed;
+
+#include <net/skbtrace_api_common.h>
+#include <net/skbtrace_api_ipv4.h>
+
+#endif
