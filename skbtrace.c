@@ -47,7 +47,7 @@
 #include <sys/sendfile.h>
 
 #include "list.h"
-#include "skbtrace_api.h"
+#include "linux/skbtrace_api.h"
 
 #define DEBUGFS_TYPE		(0x64626720)
 
