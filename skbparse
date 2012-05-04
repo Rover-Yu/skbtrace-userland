@@ -242,20 +242,17 @@ def tcp_conn_data_desc(ptr, flags, data):
 
 def tcp_sendlim_data_desc(ptr, flags, data):
 	desc  = "sock=0x%x" % ptr
-	fmt = "IILLIII"
-	val, cnt, sec, nsec, w0, w1, w2 = struct.unpack(fmt, data)
+	fmt = "IILLIIII"
+	val, cnt, sec, nsec, ssthresh, cwnd, cnt, swnd = struct.unpack(fmt, data)
 	desc += " begin=%d.%d" % (sec, nsec)
 	desc += " cnt=%d" % cnt
 	if (1<<11) & flags: #OK
 		desc += " sentpkts=%d" % val
 	elif (1<<10) & flags: # other
 		desc += " errcode=%d" % val
-	elif (1<<4) & flags: # cwnd
-		desc += " ssthresh=%d cwnd=%d/%d" % (w0, w1, w2)
-	elif (1<<5) & flags: # swnd
-		desc += " swnd=%d" % w0
 	else:
 		desc += " mtuprobe=%d" % val
+	desc += " ssthresh=%d cwnd=%d/%d swnd=%d" % (ssthresh, cwnd, cnt, swnd)
 	return desc
 
 def unknown_data_desc(ptr, flags, data):
