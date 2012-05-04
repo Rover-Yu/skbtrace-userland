@@ -667,7 +667,7 @@ static void disable_skbtrace(void)
 	unsigned long sc, si, hw;
 	long cpu;
 
-	skbtrace_enable(NULL);
+	skbtrace_enable(NULL); /* stop tracing */
 	Tracing_stop = 1;
 	for (cpu = 0; cpu < Nr_processors; cpu++) {
 		char *msg;
@@ -677,6 +677,7 @@ static void disable_skbtrace(void)
 			fprintf(stderr, "Thread-%ld: %s\n", cpu, msg);
 	}
 
+	skbtrace_enable(NULL); /* delete channels */
 	dropped = skbtrace_dropped();
 	skbtrace_dropped_reset();
 	if (!dropped)
@@ -829,7 +830,7 @@ static void* do_tracing_targeted_file(int epfd, long cpu)
 {
 	tracing_t *tracing;
 	struct epoll_event events[NR_CHANNELS];
-	int nr_events;
+	int nr_events, last_round = 0;
 
 	while ((nr_events = epoll_wait(epfd, (struct epoll_event*)events, NR_CHANNELS, 100)) >= 0) {
 
@@ -869,8 +870,14 @@ if (Verbose > 1)
 }
 			} while (1);
 		}
-		if (Tracing_stop)
+		if (Tracing_stop) {
+			if (!last_round) {
+				last_round = 1;
+				continue;
+			}
 			break;
+		}
+
 	}
 
 	return Tracing_stop ? NULL : err_msg("epoll_wait()");
@@ -880,7 +887,7 @@ static void* do_tracing_targeted_stdout(int epfd, long cpu)
 {
 	tracing_t *tracing;
 	struct epoll_event events[NR_CHANNELS];
-	int nr_events;
+	int nr_events, last_round = 0;
 	char *buf;
 
 	buf = malloc(Subbuf_size*Subbuf_nr);
@@ -918,8 +925,13 @@ if (Verbose > 1)
 					return err_msg("read()");
 			} while (1);
 		}
-		if (Tracing_stop)
+		if (Tracing_stop) {
+			if (!last_round) {
+				last_round = 1;
+				continue;
+			}
 			break;
+		}
 	}
 
 	return NULL;
