@@ -44,7 +44,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <sys/sendfile.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "list.h"
 #include "linux/skbtrace_api.h"
@@ -98,6 +99,7 @@ static int Verbose;
 static int On_stdout;
 static unsigned int Channels_mask= -1;	 /* receive data from all channels, default */
 static int *Processors_mask;
+static char **Cmd_line;
 static pthread_spinlock_t Stdout_lock;
 static pthread_mutex_t Done_lock = PTHREAD_MUTEX_INITIALIZER;
 static int Tracing_stop;
@@ -385,7 +387,7 @@ static void handle_args(int argc, char *argv[])
 		break;
 	case 'h':
 	default:
-		show_usage(argv);	/* exit here */
+		show_usage(argv);
 	case 'e':
 		if (add_one_event(optarg)) {
 			fprintf(stderr, "failed to add event '%s'\n", optarg);
@@ -447,8 +449,21 @@ static void handle_args(int argc, char *argv[])
 	}
 
 	if (optind < argc) {
-		fprintf(stderr, "Unknown command line argument:%s\n", argv[optind]);
-		exit(1);
+		int i, nr = argc - optind;
+
+		if (Stop_timeout) {
+			fprintf(stderr, "Unknown option: %s\n", argv[optind]);
+			exit(1);
+		}
+
+		Cmd_line = malloc(sizeof(char *) * (1 + nr));
+		if (!Cmd_line) {
+			fprintf(stderr, "Failed to allocate memory\n");
+			exit(1);
+		}
+		memset(Cmd_line, 0, sizeof(char *) * nr);
+		for (i = 0; i < nr; i++)
+			Cmd_line[i] = argv[optind+i];
 	}
 
 	if (!Verbose)
@@ -621,6 +636,7 @@ static void enable_skbtrace(void)
 
 	free(line);
 
+	skbtrace_enable(NULL);
 	skbtrace_enable(NULL);
 	skbtrace_dropped_reset();
 	skbtrace_subbuf_setup();
@@ -831,6 +847,7 @@ static void* do_tracing_targeted_file(int epfd, long cpu)
 	tracing_t *tracing;
 	struct epoll_event events[NR_CHANNELS];
 	int nr_events, last_round = 0;
+	ssize_t done;
 
 	while ((nr_events = epoll_wait(epfd, (struct epoll_event*)events, NR_CHANNELS, 100)) >= 0) {
 
@@ -839,7 +856,7 @@ if (Verbose > 1 && nr_events) {
 }
 
 		while (--nr_events >= 0) {
-			ssize_t total, offset, done;
+			ssize_t total, offset;
  			
 			if (events[nr_events].events & EPOLLERR)
 				return err_msg("epoll_wait()");
@@ -874,8 +891,8 @@ if (Verbose > 1)
 			if (!last_round) {
 				last_round = 1;
 				continue;
-			}
-			break;
+			} else if (done <= 0)
+				break;
 		}
 
 	}
@@ -889,6 +906,7 @@ static void* do_tracing_targeted_stdout(int epfd, long cpu)
 	struct epoll_event events[NR_CHANNELS];
 	int nr_events, last_round = 0;
 	char *buf;
+	ssize_t done;
 
 	buf = malloc(Subbuf_size*Subbuf_nr);
 	if (!buf)
@@ -900,7 +918,6 @@ if (Verbose > 1 && nr_events) {
 	fprintf(stderr, "epoll_wait() return with %d events\n", nr_events);
 }
 		while (--nr_events >= 0) {
-			ssize_t done;
 			if (events[nr_events].events & EPOLLERR)
 				return err_msg("epoll_wait()");
 			tracing = (tracing_t*)events[nr_events].data.ptr;
@@ -929,8 +946,8 @@ if (Verbose > 1)
 			if (!last_round) {
 				last_round = 1;
 				continue;
-			}
-			break;
+			} else if (done <= 0)
+				break;
 		}
 	}
 
@@ -1008,6 +1025,7 @@ quit:
 
 static void start_tracing(void)
 {
+	pid_t pid;
 	long cpu;
 
 	if (!validate_events())
@@ -1029,6 +1047,17 @@ static void start_tracing(void)
 
 	enable_skbtrace();
 
+	if (Cmd_line) {
+		pid = fork();
+		if (pid < 0) {
+			fprintf(stderr, "fork() failed: %s\n", strerror(errno));
+			exit(1);
+		} else if (0 == pid) {
+			execvp(Cmd_line[0], Cmd_line);
+			exit(1);
+		}
+	}
+
 	for (cpu = 0; cpu < Nr_processors; cpu++) {
 		if (pthread_create(Tracing_threads+cpu, NULL, tracing, (void*)cpu))
 			break;
@@ -1036,6 +1065,9 @@ static void start_tracing(void)
 	
 	if (Stop_timeout > 0) {
 		sleep(Stop_timeout);
+		disable_skbtrace();
+	} else if (Cmd_line) {
+		waitpid(pid, NULL, 0);
 		disable_skbtrace();
 	}
 
@@ -1064,7 +1096,7 @@ static void processors_mask_init(void)
 
 int main(int argc, char *argv[])
 {
-	system("/sbin/modprobe skbtrace");
+	system("/sbin/modprobe skbtrace >/dev/null 2>&1");
 	processors_mask_init();
 	handle_args(argc, argv);
 	check_debugfs();
