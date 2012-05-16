@@ -358,7 +358,7 @@ def do_stdin_skbparse():
 	binary = trace.read(metadata_size)
 	while binary:
 		cpu, channel, pktlen = struct.unpack(metadata_fmt, binary)
-		channel = channel_table.get(channel, "unknown")
+		channel = channel_table.get(channel, "unknown/%d" % channel)
 		done = 0
 		while done < pktlen:
 			binary = trace.read(hdr_size)
