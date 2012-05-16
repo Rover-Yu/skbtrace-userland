@@ -47,6 +47,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include <pcap.h>
+
 #include "list.h"
 #include "linux/skbtrace_api.h"
 
@@ -95,6 +97,7 @@ static long Nr_processors;
 static int Subbuf_size = SKBTRACE_DEF_SUBBUF_SIZE;
 static int Subbuf_nr = SKBTRACE_DEF_SUBBUF_NR;
 static int Overwrite_existed_results = O_EXCL;
+static struct bpf_program Def_bpf_program;
 static int Verbose;
 static int On_stdout;
 static unsigned int Channels_mask= -1;	 /* receive data from all channels, default */
@@ -113,12 +116,6 @@ struct available_event {
 
 static struct available_event *Available_events;
 
-static LIST_HEAD(Enabled_filter_list);
-struct filter {
-	struct list_head list;
-	char name[];
-};
-
 static LIST_HEAD(Enabled_event_list);
 struct event {
 	struct list_head list;
@@ -126,14 +123,45 @@ struct event {
 	char name[];
 };
 
+static void *append_data(const char *dir, const char *fn, void *data, int nr_bytes);
 static char *read_one_line(const char *dir, const char *fn, FILE **fp, char **line, size_t *len);
 static char *append_one_line(const char *dir, const char *fn, char *line);
 static int add_one_event(char *event_spec);
-static int add_one_filter(char *filter_spec);
 
-static inline char *skbtrace_filter(char *filter)
+static void bpf_dumpbin(const struct bpf_program *fp)
 {
-	return append_one_line(Debugfs_path, SKBTRACE_FILTERS_PATH, filter);
+	struct bpf_insn *insn;
+	int i;
+	int n = fp->bf_len;
+
+	fprintf(stderr, "BPF instructions\n");
+	insn = fp->bf_insns;
+	for (i = 0; i < n; ++insn, ++i) {
+		fprintf(stderr, "\t%s\n", bpf_image(insn, i));
+		fprintf(stderr, "\t\t{ 0x%x, %d, %d, 0x%08x },\n",
+		       insn->code, insn->jt, insn->jf, insn->k);
+	}
+}
+
+static int bpf_compile(char *bpf_string, int linktype)
+{
+	pcap_t *handle;
+	int ret;
+
+	handle = pcap_open_dead(linktype, 100);
+	ret = pcap_compile(handle, &Def_bpf_program, bpf_string, 1, 0);
+	if (ret < 0) {
+		pcap_perror(handle, "invalid filter: ");
+		exit(1);
+	}
+	pcap_close(handle);
+	return 0;
+}
+
+static inline void *skbtrace_filters_enable(void)
+{
+	return append_data(Debugfs_path, SKBTRACE_FILTERS_PATH,
+			&Def_bpf_program, sizeof(struct bpf_program));
 }
 
 static inline char *skbtrace_enable_default(char *spec)
@@ -211,11 +239,10 @@ static char *read_one_line(const char *dir, const char *fn, FILE **fp, char **li
 	return *line;
 }
 
-static char *append_one_line(const char *dir, const char *fn, char *line)
+static void *append_data(const char *dir, const char *fn, void *data, int nr_bytes)
 {
 	char *path;
 	int fd;
-	ssize_t line_len;
 
 	path = malloc(strlen(dir) + strlen(fn) + 2);
 	if (!path)
@@ -226,14 +253,21 @@ static char *append_one_line(const char *dir, const char *fn, char *line)
 	if (fd < 0)
 		return NULL;
 
-	line_len = strlen(line);
-	if (line_len != write(fd, line, line_len)) {
+	if (nr_bytes != write(fd, data, nr_bytes)) {
 		close(fd);
 		return NULL;
 	}
 
 	close(fd);
-	return line;
+	return data;
+}
+
+static char *append_one_line(const char *dir, const char *fn, char *line)
+{
+	int nr_bytes;
+
+	nr_bytes = strlen(line);
+	return append_data(dir, fn, line, nr_bytes);
 }
 
 /* This assumes that we enabled trace events support in kernel */
@@ -366,7 +400,6 @@ static int handle_processor_arg(char *processors_list)
 	return 0;
 }
 
-
 static void handle_args(int argc, char *argv[])
 {
 	int opt;
@@ -395,10 +428,7 @@ static void handle_args(int argc, char *argv[])
 		}
 		break;
 	case 'F':
-		if (add_one_filter(optarg)) {
-			fprintf(stderr, "failed to add filter '%s'\n", optarg);
-			exit(1);
-		}
+		bpf_compile(optarg, DLT_RAW);
 		break;
 	case 'c':
 		Conf_pathlist = optarg;
@@ -491,30 +521,6 @@ static int is_available_event(const char *event_name)
 			return 1;
 		avail_e = avail_e->next;
 	}
-	return 0;
-}
-
-static int add_one_filter(char *filter_spec)
-{
-	struct filter *f;
-
-	if (!filter_spec)
-		return -EINVAL;
-
-	list_for_each_entry(f, &Enabled_filter_list, list) {
-		if (!strcmp(f->name, filter_spec))
-			return -EEXIST;
-	}
-
-	f = malloc(sizeof(struct filter) + strlen(filter_spec) + 1);
-	if (!f) {
-		fprintf(stderr, "Need more memory\n");
-		exit(1);
-	}
-
-	INIT_LIST_HEAD(&f->list);
-	strcpy((char*)f->name, filter_spec);
-	list_add_tail(&f->list, &Enabled_filter_list);
 	return 0;
 }
 
@@ -624,7 +630,6 @@ static void enable_skbtrace(void)
 	char *line;
 	struct available_event *avail_e;
 	struct event *e;
-	struct filter *f;
 
 	line = skbtrace_version();
 	if (!line || strcmp(line, SKBTRACE_K_VERSION)) {
@@ -641,13 +646,10 @@ static void enable_skbtrace(void)
 	skbtrace_dropped_reset();
 	skbtrace_subbuf_setup();
 
-	if (Verbose && !list_empty(&Enabled_filter_list))
-		fprintf(stderr, "Enabled filter list:\n");
-
-	list_for_each_entry(f, &Enabled_filter_list, list) {
-		if (Verbose)
-			fprintf(stderr, "\t%s\n", (char*)f->name);
-		skbtrace_filter((char*)f->name);
+	if (Def_bpf_program.bf_len > 0) {
+		if (Verbose > 1)
+			bpf_dumpbin(&Def_bpf_program);
+		skbtrace_filters_enable();
 	}
 
 	if (Verbose)
