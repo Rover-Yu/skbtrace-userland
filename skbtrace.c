@@ -747,8 +747,6 @@ static void clearup_tracing(int fd[NR_CHANNELS*2])
 	unsigned int i;
 
 	for (i = 0; i < sizeof(fd)/sizeof(int); i++) {
-		if (On_stdout && i >= NR_CHANNELS)
-			continue;
 		if (fd[i] >= 0)
 			close(fd[i]);
 	}
@@ -763,11 +761,6 @@ static void* __setup_tracing_fd(char *prefix, char *fn, long cpu,
 
 	if (!Processors_mask[cpu]) {
 		fd[idx] = -1;
-		return NULL;
-	}
-
-	if (On_stdout && idx >= NR_CHANNELS) {
-		fd[idx] = STDOUT_FILENO;
 		return NULL;
 	}
 
@@ -875,9 +868,18 @@ if (Verbose > 1 && nr_events) {
 				if (MAP_FAILED == tracing->buf)
 					return err_msg("mmap()");
 				done = read(tracing->ifd, tracing->buf + tracing->size - offset, total);
-				if (done > 0)
+				if (done > 0) {
 					tracing->size += done;
-				else if (!done || EAGAIN == errno)
+					if (On_stdout) {
+						/*
+						 * The event data still write into disks, just use pipe
+						 * to notify otherone (e.g. skbparse) to process them.
+						 */
+						pthread_spin_lock(&Stdout_lock);
+						printf("%lu %lu %lu\n", cpu, tracing->channel, done);
+						pthread_spin_unlock(&Stdout_lock);
+					}
+				} else if (!done || EAGAIN == errno)
 					break;
 				else
 					return err_msg("read()");
@@ -900,60 +902,6 @@ if (Verbose > 1)
 	}
 
 	return Tracing_stop ? NULL : err_msg("epoll_wait()");
-}
-
-static void* do_tracing_targeted_stdout(int epfd, long cpu)
-{
-	tracing_t *tracing;
-	struct epoll_event events[NR_CHANNELS];
-	int nr_events, last_round = 0;
-	char *buf;
-	ssize_t done;
-
-	buf = malloc(Subbuf_size*Subbuf_nr);
-	if (!buf)
-		return "Need more memory";
-
-	while ((nr_events = epoll_wait(epfd, (struct epoll_event*)events, NR_CHANNELS, 100)) >= 0) {
-
-if (Verbose > 1 && nr_events) {
-	fprintf(stderr, "epoll_wait() return with %d events\n", nr_events);
-}
-		while (--nr_events >= 0) {
-			if (events[nr_events].events & EPOLLERR)
-				return err_msg("epoll_wait()");
-			tracing = (tracing_t*)events[nr_events].data.ptr;
-			do {
-				done = read(tracing->ifd, buf, Subbuf_size*Subbuf_nr);
-				if (done > 0) {
-					pthread_spin_lock(&Stdout_lock);
-					write(STDOUT_FILENO, &cpu, sizeof(long));
-					write(STDOUT_FILENO, &tracing->channel, sizeof(long));
-					write(STDOUT_FILENO, &done, sizeof(ssize_t));
-					write(STDOUT_FILENO, buf, done);
-					pthread_spin_unlock(&Stdout_lock);
-if (Verbose > 1)
-{
-				fprintf(stderr, "cpu=%ld ifd=%d ofd=1 read=%ld\n",
-						cpu, tracing->ifd, done);
-}
-					continue;
-				} else if (!done || EAGAIN != errno)
-					break;
-				else
-					return err_msg("read()");
-			} while (1);
-		}
-		if (Tracing_stop) {
-			if (!last_round) {
-				last_round = 1;
-				continue;
-			} else if (done <= 0)
-				break;
-		}
-	}
-
-	return NULL;
 }
 
 static void* do_tracing(long cpu, int fd[NR_CHANNELS*2])
@@ -982,12 +930,9 @@ static void* do_tracing(long cpu, int fd[NR_CHANNELS*2])
 			return err_msg("epoll_ctl()");
 	}
 
-	if (!On_stdout)
-		msg = do_tracing_targeted_file(epfd, cpu);
-	else
-		msg = do_tracing_targeted_stdout(epfd, cpu);
+	msg = do_tracing_targeted_file(epfd, cpu);
 
-	for (i = 0; !On_stdout && i < NR_CHANNELS; i++)
+	for (i = 0; i < NR_CHANNELS; i++)
 		ftruncate(tracing_array[i].ofd, tracing_array[i].size);
 
 	close(epfd);
