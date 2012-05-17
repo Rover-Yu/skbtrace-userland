@@ -347,31 +347,10 @@ def open_file(fn, mode):
 		print "Can't open", ifn
 		sys.exit(1)
 
-def do_stdin_skbparse():
-	trace = sys.stdin
-	parse = sys.stdout
-	metadata_fmt = "LLL"
-	metadata_size = Size_long * 3 # cpu, channel-id, data-length-in-bytes
-	hdr_fmt = "HHILLPL"
-	hdr_size = 2 + 2 + 4 + Size_long * 3 + 8
-
-	binary = trace.read(metadata_size)
-	while binary:
-		cpu, channel, pktlen = struct.unpack(metadata_fmt, binary)
-		channel = channel_table.get(channel, "unknown/%d" % channel)
-		done = 0
-		while done < pktlen:
-			binary = trace.read(hdr_size)
-			trace_size = parse_skbtrace_header(trace, parse, cpu, channel, binary)
-			done += trace_size
-		binary = trace.read(metadata_size)
-
 def do_skbparse(ifn = "", ofn = ""):
 	try:
 		try:
 			trace = parse = None
-			if not ifn:
-				return do_stdin_skbparse()
 			reg = re.compile(".*trace\.(?P<channel>((hardirq)|(softirq)|(syscall)))\.cpu(?P<cpu>[0-9]+)")
 			channel = reg.match(ifn).groupdict()["channel"]
 			cpu = reg.match(ifn).groupdict()["cpu"]
@@ -396,9 +375,6 @@ def do_skbparse(ifn = "", ofn = ""):
 		ofn and parse.close()
 
 def skbparse(skbtrace_list = [], skbparse_list = []):
-	if not skbtrace_list:
-		do_skbparse()
-		return
 	size = len(skbtrace_list)
 	for i in range(size):
 		skbtrace = skbtrace_list[i]
@@ -410,9 +386,6 @@ def skbparse(skbtrace_list = [], skbparse_list = []):
 
 if __name__ == "__main__":
 	handle_args(sys.argv[1:])
-	if conf("stdin"):
-		skbparse()
-		sys.exit(0)
 	skbtrace_list = locate_skbtrace_results()
 	skbparse_list = create_skbparse_results(skbtrace_list)
 	if conf("verbose"):
