@@ -68,7 +68,9 @@
 
 #define SKBTRACE_VERSION	"0.1.0"
 #define SKBTRACE_K_VERSION	"1"
-#define OPTSTRING		"r:D:w:b:n:c:C:p:e:F:fslvVh"
+#define OPTSTRING_WITHOUT_ARG	"fslvVh"
+#define OPTSTRING_WITH_ARG	"r:D:w:b:n:c:C:p:e:F:"
+#define OPTSTRING		OPTSTRING_WITH_ARG OPTSTRING_WITHOUT_ARG
 #define USAGE_STR \
 	"\t-r ARG Where to mount debugfs, default is /sys/kernel/debug\n" \
 	"\t-D ARG Where to write raw trace data, default is ./skbtrace.results\n" \
@@ -398,117 +400,6 @@ static int handle_processor_arg(char *processors_list)
 		cur = strsep(&processors_list, ",");
 	}
 	return 0;
-}
-
-static void handle_args(int argc, char *argv[])
-{
-	int opt;
-	int has_p = 0;
-
-	while ((opt = getopt(argc, argv, OPTSTRING)) != -1) {
-	switch (opt) {
-	case 'v':
-		show_version(argv);	/* exit here */
-	case 'l':
-		show_skbtrace_events();	/* exit here */
-	case 'f':
-		Overwrite_existed_results = 0;
-		break;
-	case 's':
-		On_stdout = 1;
-		pthread_spin_init(&Stdout_lock, PTHREAD_PROCESS_PRIVATE);
-		break;
-	case 'h':
-	default:
-		show_usage(argv);
-	case 'e':
-		if (add_one_event(optarg)) {
-			fprintf(stderr, "failed to add event '%s'\n", optarg);
-			exit(1);
-		}
-		break;
-	case 'F':
-		bpf_compile(optarg, DLT_RAW);
-		break;
-	case 'c':
-		Conf_pathlist = optarg;
-		break;
-	case 'C':
-		if (handle_channel_arg(optarg)) {
-			fprintf(stderr, "Invalid channels list\n");
-			exit(1);
-		}
-		break;
-	case 'p':
-		if (handle_processor_arg(optarg)) {
-			fprintf(stderr, "Invalid processors list\n");
-			exit(1);
-		}
-		has_p = 1;
-		break;
-	case 'r':
-		Debugfs_path = optarg;
-		break;
-	case 'D':
-		Output_path = optarg;
-		break;
-	case 'w':
-		Stop_timeout = atoi(optarg);
-		if (Stop_timeout <= 0) {
-			fprintf(stderr, "Invalid tracing time length, must be > 0\n");
-			exit(1);
-		}
-		break;
-	case 'V':
-		++Verbose;
-		break;
-	case 'b':
-		Subbuf_size = atoi(optarg);
-		break;
-	case 'n':
-		Subbuf_nr = atoi(optarg);
-		break;
-	}
-	}
-
-	if (!has_p) {
-		int i;
-
-		for (i=0; i<Nr_processors; i++)
-			Processors_mask[i] = 1;
-	}
-
-	if (optind < argc) {
-		int i, nr = argc - optind;
-
-		if (Stop_timeout) {
-			fprintf(stderr, "Unknown option: %s\n", argv[optind]);
-			exit(1);
-		}
-
-		Cmd_line = malloc(sizeof(char *) * (1 + nr));
-		if (!Cmd_line) {
-			fprintf(stderr, "Failed to allocate memory\n");
-			exit(1);
-		}
-		memset(Cmd_line, 0, sizeof(char *) * nr);
-		for (i = 0; i < nr; i++)
-			Cmd_line[i] = argv[optind+i];
-	}
-
-	if (!Verbose)
-		return;
-
-	fprintf(stderr, "Search path for skbtrace.conf = %s\n", Conf_pathlist);
-	fprintf(stderr, "Debugfs mount path = %s\n", Debugfs_path);
-	fprintf(stderr, "Results output path = %s\n", Output_path);
-	fprintf(stderr, "Tracing during time = %d secs\n", Stop_timeout);
-	fprintf(stderr, "Relayfs subbuf size = %d Bytes\n", Subbuf_size);
-	fprintf(stderr, "Relayfs subbuf count = %d\n", Subbuf_nr);
-	if (!Stop_timeout)
-		fprintf(stderr, "Tracing go on until you press <Ctrl-C>\n");
-	else
-		fprintf(stderr, "Tracing time length = %d secs\n", Stop_timeout);
 }
 
 static int is_available_event(const char *event_name)
@@ -1039,6 +930,122 @@ static void processors_mask_init(void)
 	}
 	for (i=0; i<Nr_processors; i++)
 		Processors_mask[i] = 0;
+}
+
+static void handle_args(int argc, char *argv[])
+{
+	int opt;
+	int has_p = 0;
+
+	while ((opt = getopt(argc, argv, OPTSTRING)) != -1) {
+	switch (opt) {
+	case 'v':
+		show_version(argv);	/* exit here */
+	case 'l':
+		show_skbtrace_events();	/* exit here */
+	case 'h':
+	default:
+		show_usage(argv);	/* exit here */
+	case 'V':
+		++Verbose;
+		break;
+	case 'f':
+		Overwrite_existed_results = 0;
+		break;
+	case 's':
+		On_stdout = 1;
+		pthread_spin_init(&Stdout_lock, PTHREAD_PROCESS_PRIVATE);
+		break;
+	case 'e':
+		if (add_one_event(optarg)) {
+			fprintf(stderr, "failed to add event '%s'\n", optarg);
+			exit(1);
+		}
+		break;
+	case 'F':
+		bpf_compile(optarg, DLT_RAW);
+		break;
+	case 'c':
+		Conf_pathlist = optarg;
+		break;
+	case 'C':
+		if (handle_channel_arg(optarg)) {
+			fprintf(stderr, "Invalid channels list\n");
+			exit(1);
+		}
+		break;
+	case 'p':
+		if (handle_processor_arg(optarg)) {
+			fprintf(stderr, "Invalid processors list\n");
+			exit(1);
+		}
+		has_p = 1;
+		break;
+	case 'r':
+		Debugfs_path = optarg;
+		break;
+	case 'D':
+		Output_path = optarg;
+		break;
+	case 'w':
+		Stop_timeout = atoi(optarg);
+		if (Stop_timeout <= 0) {
+			fprintf(stderr, "Invalid tracing time length, must be > 0\n");
+			exit(1);
+		}
+		break;
+	case 'b':
+		Subbuf_size = atoi(optarg);
+		break;
+	case 'n':
+		Subbuf_nr = atoi(optarg);
+		break;
+	}
+	if (optind < argc && strchr(OPTSTRING_WITHOUT_ARG, opt)) {
+		if (argv[optind][0] != '-')
+			goto exit_getopt;
+	}
+	}
+
+exit_getopt:
+	if (!has_p) {
+		int i;
+
+		for (i=0; i<Nr_processors; i++)
+			Processors_mask[i] = 1;
+	}
+
+	if (optind < argc) {
+		int i, nr = argc - optind;
+
+		if (Stop_timeout) {
+			fprintf(stderr, "Unknown option: %s\n", argv[optind]);
+			exit(1);
+		}
+		Cmd_line = malloc(sizeof(char *) * (1 + nr));
+		if (!Cmd_line) {
+			fprintf(stderr, "Failed to allocate memory\n");
+			exit(1);
+		}
+		memset(Cmd_line, 0, sizeof(char *) * nr);
+		for (i = 0; i < nr; i++) {
+			Cmd_line[i] = argv[optind+i];
+		}
+	}
+
+	if (!Verbose)
+		return;
+
+	fprintf(stderr, "Search path for skbtrace.conf = %s\n", Conf_pathlist);
+	fprintf(stderr, "Debugfs mount path = %s\n", Debugfs_path);
+	fprintf(stderr, "Results output path = %s\n", Output_path);
+	fprintf(stderr, "Tracing during time = %d secs\n", Stop_timeout);
+	fprintf(stderr, "Relayfs subbuf size = %d Bytes\n", Subbuf_size);
+	fprintf(stderr, "Relayfs subbuf count = %d\n", Subbuf_nr);
+	if (!Stop_timeout)
+		fprintf(stderr, "Tracing go on until you press <Ctrl-C>\n");
+	else
+		fprintf(stderr, "Tracing time length = %d secs\n", Stop_timeout);
 }
 
 int main(int argc, char *argv[])
