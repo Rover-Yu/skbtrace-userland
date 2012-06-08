@@ -70,24 +70,24 @@
 #define SKBTRACE_K_VERSION	"1"
 #define OPTSTRING		"r:D:w:b:n:c:C:p:e:F:fslvVh"
 #define USAGE_STR \
-	"\t-r ARG Path to mounted debugfs, defaults to /sys/kernel/debug\n" \
-	"\t-D ARG Directory to prepend to output file names\n" \
-	"\t-w ARG Stop after defined time, in seconds\n" \
-	"\t-b ARG Sub buffer size in bytes\n" \
-	"\t-n ARG Number of sub buffers\n" \
-	"\t-c ARG Search path for configuration file skbtrace.conf, default is to enable all tracepoints\n" \
-	"\t-C CHANNEL_LIST Given channel list to specifiy what are channels which skbtrace can receive from\n" \
-	"\t\tCHANNEL_LIST\t\tAvailable channels are syscall, softirq, hardirq\n" \
-	"\t-p PROCESSOR_LIST Given a processors list to specifiy what are processors which skbtrace can receive from\n" \
-	"\t-e EVENT[,OPTIONS_LIST] Specifiy an interesting trace event, this can be used multiple times\n" \
-	"\t\tEVENT\t\tOne of available trace events, please refer the output of -l option\n" \
-	"\t\tOPTIONS_LIST\tThe optional parameters of the trace event, the format is option1=val1,option2=val2,...\n" \
-	"\t-F ARG Specify filter for sk_buff and sockets\n" \
-	"\t-f Overwrite existed result files\n" \
-	"\t-s Write result data on stdandard output\n" \
-	"\t-l List all available trace events, and channels\n" \
+	"\t-r ARG Where to mount debugfs, default is /sys/kernel/debug\n" \
+	"\t-D ARG Where to write raw trace data, default is ./skbtrace.results\n" \
+	"\t-w ARG Trace timeout in seconds, default is until you press Ctrl-C\n" \
+	"\t-b ARG Sub-buffer size in kernel ring buffer, in bytes\n" \
+	"\t-n ARG Number of sub-buffers in kernel ring buffer\n" \
+	"\t-c ARG Where to search configuration file skbtrace.conf, default is to enable all tracepoints\n" \
+	"\t-C CHANNEL_LIST The channel list that enable tracing\n" \
+	"\t\tCHANNEL_LIST\t\tAvailable channels are syscall, softirq, hardirq, default is all\n" \
+	"\t-p PROCESSOR_LIST The processor list to enable tracing, default is all\n" \
+	"\t-e EVENT[,OPTIONS_LIST] Specifiy an interesting tracepoint, this can be used multiple times\n" \
+	"\t\tEVENT\t\tOne of available tracepoints, please refer the output of -l option\n" \
+	"\t\tOPTIONS_LIST\tThe optional parameters of the tracepoint, the format is option1=val1,option2=val2,...\n" \
+	"\t-F ARG Specify filter for sk_buff\n" \
+	"\t-f Forcely overwrite existed result files\n" \
+	"\t-s Write raw traced data on stdandard output\n" \
+	"\t-l List all available tracepoints and channels\n" \
 	"\t-V Show actual configuration details\n" \
-	"\t-v Print program version info\n\n"
+	"\t-v Show version\n\n"
 
 static char *Conf_pathlist = "./:/etc/skbtrace/";
 static char *Debugfs_path = "/sys/kernel/debug";
