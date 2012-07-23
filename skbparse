@@ -11,30 +11,73 @@ import time
 import glob
 import struct
 import re
-import socket
+
+from util import *
+import events_common
+import events_ipv4
 
 SKBPARSE_VERSION = "0.1.0"
 
-SZ_SOCKADDR_IN4 = 16
-SZ_SOCKADDR_IN6 = 28
+Action_table = {}
 
-SZ_ADDR_IN4 = 4
-SZ_ADDR_IN6 = 16
+class unknown_block:
+	def __init__(self, block, trace):
+		self.blk = block
+		size = block.len - block.common_header_size()
+		self.data = trace.read(size)
 
-def parse_sockaddr(sockaddr):
-	family = sockaddr[:2]
-	family = (ord(family[1]) << 8) + ord(family[0])
-	if family == socket.AF_INET:
-		sin_port = sockaddr[2:2+2]
-		port = (ord(sin_port[0]) << 8) + ord(sin_port[1])
-		sin_addr = sockaddr[4:4+SZ_ADDR_IN4]
-		addr = socket.inet_ntop(socket.AF_INET, sin_addr)
-		sz = SZ_SOCKADDR_IN4
-	else:
-		addr = "Not-IPv4"
-		port = 0
-		sz = 0
-	return (addr, port), sz
+	def __str__(self):
+		s = "action=unknown(%d)" % self.blk.action
+		s += " ptr=0x%x flags=0x%x data=%s" % (self.blk.ptr, self.blk.flags, `self.data`)
+		return s
+
+class skbtrace_block:
+	def __init__(self, trace, channel, cpu):
+		global Action_table
+		self.channel = channel
+		self.cpu = cpu
+		self.len = 0
+		self.action = 0
+		self.flags = 0
+		self.ts = None
+        	self.seq = 0
+		self.ptr = 0
+		self.__load(trace)
+		event_class = Action_table.get(self.action, unknown_block)
+		self.event2 = event_class(self, trace)
+
+	def common_header_size(self):
+		s = struct.calcsize("H") # len
+		s += struct.calcsize("H") # action
+		s += struct.calcsize("I") # flags
+		s += struct.calcsize("LL") # ts
+		s += struct.calcsize("L") # seq
+		s += struct.calcsize("P") # ptr
+		return s
+
+	def __load(self, trace):
+		size = self.common_header_size()
+		binary = trace.read(size)
+		if not binary:
+			raise ValueError, "invalid skbtace_block"
+
+		fmt = "HHILLLL"
+		self.len, self.action, self.flags, self.sec, self.nsec, \
+			self.seq, self.ptr = struct.unpack(fmt, binary)
+
+	def __str__(self):
+		s = "%ld %ld.%ld cpu=%s channel=%s " % \
+			(self.seq, self.sec, self.nsec, \
+			self.cpu, self.channel)
+		s += str(self.event2)
+		return s
+
+	def __cmp__(self, other):
+		if self.seq < other.seq:
+			return -1
+		elif self.seq > other.seq:
+			return 1
+		return 0
 
 def setup_conf_table(conf_table, key, value):
 	if value:
@@ -73,7 +116,7 @@ def option(has_arg, key, default, help, handler = setup_conf_table):
 Conf_table = {}
 Opt_parse_table = {
 	"-i" : option(True,  "input-dir",  "./skbtrace.results",   "The results directory that skbtrace utility generated"),
-	"-o" : option(True,  "output-dir", "./skbparse.results",   "The results directory that skbparse will generate"),
+	"-o" : option(True,  "output-fn", "./skbparse.results",   "The results filename that skbparse will generate"),
 	"-c" : option(False, "per-cpu",    False, "Generate per-cpu skbparse results, default is all-in-one result file"),
 	"-V" : option(False, "verbose",    False, "Show more runtime information"),
 	"-s" : option(False, "stdin",      None,  "Use stdin as skbtrace input source, and write parsed result on stdout"),
@@ -102,220 +145,46 @@ def handle_args(args):
 			value = True
 		callback(Conf_table, conf_name, value)
 
-channel_table = {
-	0 : "syscall",
-	1 : "softirq",
-	2 : "hardirq",
-}
+def skbparse(if_list, out_f):
+	n = len(if_list)
+	trace_info_list = []
+	reg = re.compile(".*trace\.(?P<channel>((hardirq)|(softirq)|(syscall)))\.cpu(?P<cpu>[0-9]+)")
+	try:
+		for i in range(n):
+			in_f = if_list[i]
+			channel = reg.match(in_f.name).groupdict()["channel"]
+			cpu = reg.match(in_f.name).groupdict()["cpu"]
+			trace_info_list.append((in_f, channel, cpu))
+		try:
+			while True:
+				all_eof = True
+				blk_list = []
+				for i in range(n):
+					in_f, channel, cpu = trace_info_list[i]
+					try:
+						blk = skbtrace_block(in_f, channel, cpu)
+						blk_list.append(blk)
+						all_eof = False
+					except ValueError:
+						pass
+				if all_eof:
+					break
+				for blk in blk_list:
+					out_f.write(str(blk) + "\n")
+		except KeyboardInterrupt:
+			pass
+	finally:
+		for i in range(n):
+			in_f = if_list[i]
+			in_f.close()
+		out_f.close()
 
-af_table = {
-	0        : "AF_UNSPEC",
-	1	 : "AF_UNIX",
-	1	 : "AF_LOCAL",
-	2	 : "AF_INET",
-	3	 : "AF_AX25",
-	4	 : "AF_IPX",
-	5	 : "AF_APPLETALK",
-	6	 : "AF_NETROM",
-	7	 : "AF_BRIDGE",
-	8	 : "AF_ATMPVC",
-	9	 : "AF_X25",
-	10	: "AF_INET6",
-	11	: "AF_ROSE",
-	12	: "AF_DECnet",
-	13	: "AF_NETBEUI",
-	14	: "AF_SECURITY",
-	15        : "AF_KEY",
-	16        : "AF_NETLINK/ROUTE",
-	17	: "AF_PACKET",
-	18	: "AF_ASH",
-	19	: "AF_ECONET",
-	20	: "AF_ATMSVC",
-	21	: "AF_RDS",
-	22	: "AF_SNA",
-	23	: "AF_IRDA",
-	24	: "AF_PPPOX",
-	25	: "AF_WANPIPE",
-	26	: "AF_LLC",
-	29	: "AF_CAN",
-	30	: "AF_TIPC",
-	31	: "AF_BLUETOOTH",
-	32	: "AF_IUCV",
-	33	: "AF_RXRPC",
-	34	: "AF_ISDN",
-	35	: "AF_PHONET",
-	36	: "AF_IEEE802154",
-	37	: "AF_CAIF",
-	38	: "AF_ALG",
-	39	: "AF_NFC",
-}
+def setup_action_table():
+	for m in (events_common, events_ipv4):
+		for e in m.events_list:
+			Action_table[e.action] = e
 
-#
-# kernel/include/linux/skbtrace_api.h
-#
-taskctx_flags = {
-#	bit :	(desc-if-bit-set,	desc-if-bit-clear)
-	4 :	("tx",			"rx"),
-}
-
-icsk_conn_flags = {
-	13 : ("LISTEN",		""),
-}
-
-tcp_conn_flags = {
-	4  : ("ESTABLISHED",	""),
-	5  : ("SYN_SENT",	""),
-	6  : ("SYN_RECV",	""),
-	7  : ("FIN_WAIT1",	""),
-	8  : ("FIN_WAIT2",	""),
-	9  : ("TIME_WAIT",	""),
-	10 : ("CLOSE",		""),
-	11 : ("CLOSE_WAIT",	""),
-	12 : ("LAST_ACK",	""),
-}
-
-tcp_cong_flags = {
-#	bit :	(desc-if-bit-set,	desc-if-bit-clear)
-	4 :	("cwr",			""),
-	5 :	("loss",		""),
-	6 :	("fast-rtx",		""),
-	7 :	("frto",		""),
-	8 :	("frto-loss",		""),
-	9 :	("leave",		""),
-}
-
-tcp_sendlim_flags = {
-	4 :     ("cwnd",		""),
-	5 :     ("swnd",		""),
-	6 :     ("nagle",		""),
-	7 :     ("tso",			""),
-	8 :     ("frag",		""),
-	9 :     ("pushone",		""),
-	10 :     ("other",		""),
-	11 :     ("ok",			""),
-}
-
-def rps_info_data_desc(ptr, flags, data):
-	queue_fmt = "Hxx"
-	rest_fmt = "IIIIIHHBxxx"
-	rx_queue = struct.unpack(queue_fmt, data[0:4])
-	rx_hash, cpu, ifindex, src, dst, sport, dport, proto = struct.unpack(rest_fmt, data[4:])
-	desc = "skb=0x%x" % ptr
-	desc += " rx-queue=%d" % rx_queue
-	desc += " rx-hash=0x%x" % rx_hash
-	desc += " cpu=0x%x" % cpu
-	desc += " ifindex=%d" % ifindex
-	desc += " src=0x%x" % src
-	desc += " dst=0x%x" % dst
-	desc += " sport=%d" % sport
-	desc += " dport=%d" % dport
-	desc += " proto=0x%x" % proto
-	return desc
-
-def tcp_cong_data_desc(ptr, flags, data):
-	fmt = "IIIII"
-	rcv_rtt, rto, cwnd, sndnxt, snduna = struct.unpack(fmt, data)
-	desc  = "sock=0x%x" % ptr
-	desc += " cwnd=%d" % cwnd
-	desc += " rto=%d" % rto
-	desc += " rcv_rtt=%d" % rcv_rtt
-	desc += " sndnxt=%d" % sndnxt
-	desc += " snduna=%d" % snduna
-	return desc
-
-def icsk_conn_data_desc(ptr, flags, data):
-	desc  = "sock=0x%x" % ptr
-	local, size = parse_sockaddr(data)
-	if size:
-		desc += " local=%s:%d" % (local[0], local[1])
-	return desc
-
-def tcp_conn_data_desc(ptr, flags, data):
-	desc  = "sock=0x%x" % ptr
-	local, size = parse_sockaddr(data)
-	if size:
-		desc += " local=%s:%d" % (local[0], local[1])
-		if not (flags & ((1<<8)|(1<<9)|(1<<13))):
-			peer, size = parse_sockaddr(data[size:])
-			desc += " peer=%s:%d" % (peer[0], peer[1])
-	return desc
-
-def tcp_sendlim_data_desc(ptr, flags, data):
-	desc  = "sock=0x%x" % ptr
-	fmt = "IILLIIII"
-	val, cnt, sec, nsec, ssthresh, cwnd, cnt, swnd = struct.unpack(fmt, data)
-	desc += " begin=%d.%d" % (sec, nsec)
-	desc += " cnt=%d" % cnt
-	if (1<<11) & flags: #OK
-		desc += " sentpkts=%d" % val
-	elif (1<<10) & flags: # other
-		desc += " errcode=%d" % val
-	else:
-		desc += " mtuprobe=%d" % val
-	desc += " ssthresh=%d cwnd=%d/%d swnd=%d" % (ssthresh, cwnd, cnt, swnd)
-	return desc
-
-def unknown_data_desc(ptr, flags, data):
-	return "FIXME: unknown ptr=0x%x flags=0x%x data=%s" % (ptr, flags, `data`)
-
-Action_table = {
-#	action :	(action_desc,	flags_table,		seq_table,	data_desc),
-########Common########
-	1   :		("rps_info",	{},			{},		rps_info_data_desc),
-########TCP##########
-	101 :		("tcp_cong",	tcp_cong_flags,		{},		tcp_cong_data_desc),
-	102 :		("tcp_conn",	tcp_conn_flags,		{},		tcp_conn_data_desc),
-	103 :		("tcp_sendlim",	tcp_sendlim_flags,	{},		tcp_sendlim_data_desc),
-########ICSK##########
-	201 :		("icsk_conn",	icsk_conn_flags,	{},		icsk_conn_data_desc),
-}
-
-def get_long_size():
-	machine = os.uname()[-1]
-	if machine == "x86_64":
-		return 8
-	else:
-		return 4
-Size_long = get_long_size()
-
-def parse_skbtrace_header(ifile, ofile, cpu, channel, hdr):
-	global Action_table
-	hdr_fmt = "HHILLPL"
-	hdr_size = 2 + 2 + 4 + Size_long * 3 + 8
-	size, action, flags, sec, nsec, seq, ptr = struct.unpack(hdr_fmt, hdr)
-	action_str, flags_table, seqf_table, data_desc = \
-		Action_table.get(action, (hex(action), {}, {}, unknown_data_desc))
-	flags_desc = ""
-	for f in flags_table:
-		if (1 << f) & flags:
-			desc = flags_table[f][0]
-		else:
-			desc = flags_table[f][1]
-		if desc:
-			flags_desc += desc + ","
-	if flags_desc != "":
-		flags_desc = "[" + flags_desc[:-1] + "] "
-	elif seqf_table:
-		flags_desc = "[" + seqf_table[flags] + "] "
-
-	ofile.write("%ld " % seq)
-	ofile.write("%d.%d " % (sec, nsec))
-	ofile.write("cpu=%s " % cpu)
-	ofile.write("channel=%s " % channel)
-	ofile.write("action=%s " % action_str)
-	ofile.write(" " + flags_desc)
-
-	data_size = size - hdr_size
-	if data_size:
-		data = ifile.read(data_size)
-	else:
-		data = ""
-	if data:
-		ofile.write(" " + data_desc(ptr, flags, data))
-	ofile.write("\n")
-	return size
-
-def locate_skbtrace_results():
+def open_input():
 	input_dir = conf("input-dir")
 	hw = glob.glob(input_dir + "/trace.hardirq.cpu*")
 	si = glob.glob(input_dir + "/trace.softirq.cpu*")
@@ -324,73 +193,23 @@ def locate_skbtrace_results():
 	if not results:
 		print "Can't find skbtrace results in", input_dir
 		sys.exit(1)
-	return results
+	if_list = []
+	for f in results:
+		if_list.append(open_file(f, "r"))
+	return if_list
 
-def create_skbparse_results(skbtrace_list):
-	use_stdout = conf("stdout")
-	if use_stdout:
-		return []
-	output_dir = conf("output-dir")
-	if not os.path.isdir(output_dir):
-		print "Invalid output directory", output_dir
-		sys.exit(1)
-	results = []
-	for trace in skbtrace_list:
-		parsed = output_dir + "/parsed." + os.path.basename(trace)
-		results.append(parsed)
-	return results
-
-def open_file(fn, mode):
-	try:
-		return file(fn, mode)
-	except IOError, OSError:
-		print "Can't open", ifn
-		sys.exit(1)
-
-def do_skbparse(ifn = "", ofn = ""):
-	try:
-		try:
-			trace = parse = None
-			reg = re.compile(".*trace\.(?P<channel>((hardirq)|(softirq)|(syscall)))\.cpu(?P<cpu>[0-9]+)")
-			channel = reg.match(ifn).groupdict()["channel"]
-			cpu = reg.match(ifn).groupdict()["cpu"]
-			trace = open_file(ifn, "r")
-			if ofn:
-				parse = open_file(ofn, "w")
-			else:
-				parse = sys.stdout
-			size_long = get_long_size()
-			hdr_size = 2 + 2 + 4 + size_long * 3 + 8
-			binary = trace.read(hdr_size)
-			while binary:
-				parse_skbtrace_header(trace, parse, cpu, channel, binary)
-				binary = trace.read(hdr_size)
-		except KeyboardInterrupt:
-			trace and trace.close()
-			trace = None
-			ofn and parse.close()
-			parse = None
-	finally:
-		trace and trace.close()
-		ofn and parse.close()
-
-def skbparse(skbtrace_list = [], skbparse_list = []):
-	size = len(skbtrace_list)
-	for i in range(size):
-		skbtrace = skbtrace_list[i]
-		if skbparse_list:
-			skbparse = skbparse_list[i]
-		else:
-			skbparse = ""
-		do_skbparse(skbtrace, skbparse)
+def open_output():
+	if conf("stdout"):
+		return sys.stdout
+	return open_file(conf("output-fn"), "w")
 
 if __name__ == "__main__":
+	setup_action_table()
 	handle_args(sys.argv[1:])
-	skbtrace_list = locate_skbtrace_results()
-	skbparse_list = create_skbparse_results(skbtrace_list)
+	if_list = open_input()
+	of = open_output()
 	if conf("verbose"):
 		print "skbtrace result files:"
-		map(lambda x: sys.stdout.write("\t" + x + "\n"), skbtrace_list)
-		print "skbparse result files:"
-		map(lambda x: sys.stdout.write("\t" + x + "\n"), skbparse_list)
-	skbparse(skbtrace_list, skbparse_list)
+		map(lambda x: sys.stdout.write("\t" + x.name + "\n"), if_list)
+		print "skbparse result file:", of.name
+	skbparse(if_list, of)
