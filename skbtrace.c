@@ -1027,7 +1027,7 @@ exit_getopt:
 			fprintf(stderr, "Failed to allocate memory\n");
 			exit(1);
 		}
-		memset(Cmd_line, 0, sizeof(char *) * nr);
+		memset(Cmd_line, 0, sizeof(char *) * (1 + nr));
 		for (i = 0; i < nr; i++) {
 			Cmd_line[i] = argv[optind+i];
 		}
