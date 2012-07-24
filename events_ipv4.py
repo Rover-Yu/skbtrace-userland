@@ -94,7 +94,7 @@ class tcp_sendlim:
 			raise ValueError, "invalid tcp_sendlim block"
 		fmt = "IILLIIII"
 		self.val, self.cnt, self.sec, self.nsec, self.ssthresh, \
-			self.cwnd, self.cnt, self.swnd = struct.unpack(fmt, data)
+			self.cwnd, self.cwnd_cnt, self.swnd = struct.unpack(fmt, data)
 
 	def __str__(self):
 		s = "action=tcp_sendlim"
@@ -108,7 +108,7 @@ class tcp_sendlim:
 		else:
 			s += " mtuprobe=%d" % self.val
 		s += " ssthresh=%d cwnd=%d/%d swnd=%d" % \
-			(self.ssthresh, self.cwnd, self.cnt, self.swnd)
+			(self.ssthresh, self.cwnd, self.cwnd_cnt, self.swnd)
 		return s
 
 class icsk_conn:
