@@ -94,7 +94,7 @@ class tcp_sendlim:
 			raise ValueError, "invalid tcp_sendlim block"
 		fmt = "IILLIIII"
 		self.val, self.cnt, self.sec, self.nsec, self.ssthresh, \
-			self.cwnd, self.cnt, self.swnd = struct.unpack(fmt, data)
+			self.cwnd, self.cwnd_cnt, self.swnd = struct.unpack(fmt, data)
 
 	def __str__(self):
 		s = "action=tcp_sendlim"
@@ -108,7 +108,7 @@ class tcp_sendlim:
 		else:
 			s += " mtuprobe=%d" % self.val
 		s += " ssthresh=%d cwnd=%d/%d swnd=%d" % \
-			(self.ssthresh, self.cwnd, self.cnt, self.swnd)
+			(self.ssthresh, self.cwnd, self.cwnd_cnt, self.swnd)
 		return s
 
 class icsk_conn:
@@ -133,4 +133,59 @@ class icsk_conn:
 			s += " local=%s:%d" % (self.local[0], self.local[1])
 		return s
 
-events_list = [tcp_cong, tcp_conn, tcp_sendlim, icsk_conn]
+class tcp_conn_addr:
+	action = 104
+	def __init__(self, block, trace):
+		self.blk = block
+		size = block.len - block.common_header_size()
+		data = trace.read(size)
+		if not data:
+			raise ValueError, "invalid tcp_conn_addr block"
+		self.local, size = parse_sockaddr(data)
+		if not size:
+			self.local = local
+		if (block.flags & ((1<<8)|(1<<9))):
+			self.peer = None
+		else:
+			peer, size = parse_sockaddr(data[size:])
+			if size:
+				self.peer = peer
+
+	def __str__(self):
+		s = "action=tcp_conn_addr"
+		s += " sk=0x%x" % self.blk.ptr
+		s += " state=ESTABLISHED"
+		if self.local:
+			s += " local=%s:%d" % (self.local[0], self.local[1])
+		if self.peer:
+			s += " peer=%s:%d" % (self.peer[0], self.peer[1])
+		return s
+
+class tcp_rttm:
+	action = 105
+	def __init__(self, block, trace):
+		self.blk = block
+		size = block.len - block.common_header_size()
+		data = trace.read(size)
+		if not data:
+			raise ValueError, "invalid tcp_rttm block"
+		fmt = "IIIIIII"
+		self.snd_una, self.rtt_seq, self.rtt, self.rttvar,\
+			self.srtt, self.mdev, self.mdev_max = \
+						struct.unpack(fmt, data)
+
+	def __str__(self):
+		s = "action=tcp_rttm"
+		s += " sk=0x%x" % self.blk.ptr
+		s += " snd_una=%d" % self.snd_una
+		s += " rtt_seq=%d" % self.rtt_seq
+		s += " rtt=%d" % self.rtt
+		s += " rttvar=%d" % self.rttvar
+		s += " srtt=%d" % self.srtt
+		s += " mdev=%d" % self.mdev
+		s += " mdev_max=%d" % self.mdev_max
+		return s
+
+
+events_list = [tcp_cong, tcp_conn, tcp_sendlim,\
+		icsk_conn, tcp_conn_addr, tcp_rttm]

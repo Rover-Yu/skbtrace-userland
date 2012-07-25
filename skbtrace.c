@@ -57,6 +57,7 @@
 #define SKBTRACE_CONF		"/skbtrace.conf"
 #define SKBTRACE_ENABLED_PATH	"/skbtrace/enabled"
 #define SKBTRACE_FILTERS_PATH	"/skbtrace/filters"
+#define SKBTRACE_SOCK_FILTERS_PATH	"/skbtrace/sock_filters"
 #define SKBTRACE_VERSION_PATH	"/skbtrace/version"
 #define SKBTRACE_DROPPED_PATH	"/skbtrace/dropped"
 #define SKBTRACE_SUBBUF_NR_PATH	"/skbtrace/subbuf_nr"
@@ -69,7 +70,7 @@
 #define SKBTRACE_VERSION	"0.1.0"
 #define SKBTRACE_K_VERSION	"1"
 #define OPTSTRING_WITHOUT_ARG	"fslvVh"
-#define OPTSTRING_WITH_ARG	"r:D:w:b:n:c:C:p:e:F:"
+#define OPTSTRING_WITH_ARG	"r:D:w:b:n:c:C:p:e:F:S:"
 #define OPTSTRING		OPTSTRING_WITH_ARG OPTSTRING_WITHOUT_ARG
 #define USAGE_STR \
 	"\t-r ARG Where to mount debugfs, default is /sys/kernel/debug\n" \
@@ -85,6 +86,7 @@
 	"\t\tEVENT\t\tOne of available tracepoints, please refer the output of -l option\n" \
 	"\t\tOPTIONS_LIST\tThe optional parameters of the tracepoint, the format is option1=val1,option2=val2,...\n" \
 	"\t-F ARG Specify filter for sk_buff\n" \
+	"\t-S ARG Specify filter for socket, only support filter address:port in sending form\n" \
 	"\t-f Forcely overwrite existed result files\n" \
 	"\t-s Write raw traced data on stdandard output\n" \
 	"\t-l List all available tracepoints and channels\n" \
@@ -99,7 +101,8 @@ static long Nr_processors;
 static int Subbuf_size = SKBTRACE_DEF_SUBBUF_SIZE;
 static int Subbuf_nr = SKBTRACE_DEF_SUBBUF_NR;
 static int Overwrite_existed_results = O_EXCL;
-static struct bpf_program Def_bpf_program;
+static struct bpf_program Skb_bpf_program;
+static struct bpf_program Sock_bpf_program;
 static int Verbose;
 static int On_stdout;
 static unsigned int Channels_mask= -1;	 /* receive data from all channels, default */
@@ -145,13 +148,14 @@ static void bpf_dumpbin(const struct bpf_program *fp)
 	}
 }
 
-static int bpf_compile(char *bpf_string, int linktype)
+static int bpf_compile(char *bpf_string, int linktype,
+					struct bpf_program *fprog)
 {
 	pcap_t *handle;
 	int ret;
 
 	handle = pcap_open_dead(linktype, 100);
-	ret = pcap_compile(handle, &Def_bpf_program, bpf_string, 1, 0);
+	ret = pcap_compile(handle, fprog, bpf_string, 1, 0);
 	if (ret < 0) {
 		pcap_perror(handle, "invalid filter: ");
 		exit(1);
@@ -163,7 +167,13 @@ static int bpf_compile(char *bpf_string, int linktype)
 static inline void *skbtrace_filters_enable(void)
 {
 	return append_data(Debugfs_path, SKBTRACE_FILTERS_PATH,
-			&Def_bpf_program, sizeof(struct bpf_program));
+			&Skb_bpf_program, sizeof(struct bpf_program));
+}
+
+static inline void *skbtrace_sock_filters_enable(void)
+{
+	return append_data(Debugfs_path, SKBTRACE_SOCK_FILTERS_PATH,
+			&Sock_bpf_program, sizeof(struct bpf_program));
 }
 
 static inline char *skbtrace_enable_default(char *spec)
@@ -537,10 +547,16 @@ static void enable_skbtrace(void)
 	skbtrace_dropped_reset();
 	skbtrace_subbuf_setup();
 
-	if (Def_bpf_program.bf_len > 0) {
+	if (Skb_bpf_program.bf_len > 0) {
 		if (Verbose > 1)
-			bpf_dumpbin(&Def_bpf_program);
+			bpf_dumpbin(&Skb_bpf_program);
 		skbtrace_filters_enable();
+	}
+
+	if (Sock_bpf_program.bf_len > 0) {
+		if (Verbose > 1)
+			bpf_dumpbin(&Sock_bpf_program);
+		skbtrace_sock_filters_enable();
 	}
 
 	if (Verbose)
@@ -963,7 +979,10 @@ static void handle_args(int argc, char *argv[])
 		}
 		break;
 	case 'F':
-		bpf_compile(optarg, DLT_RAW);
+		bpf_compile(optarg, DLT_RAW, &Skb_bpf_program);
+		break;
+	case 'S':
+		bpf_compile(optarg, DLT_RAW, &Sock_bpf_program);
 		break;
 	case 'c':
 		Conf_pathlist = optarg;
