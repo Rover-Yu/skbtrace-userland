@@ -59,7 +59,8 @@ class skbtrace_block:
 		size = self.common_header_size()
 		binary = trace.read(size)
 		if not binary:
-			raise ValueError, "invalid skbtace_block"
+			raise ValueError, "invalid skbtace_block in %s,cpu%s" \
+				 % (self.channel, self.cpu)
 
 		fmt = "HHILLLL"
 		self.len, self.action, self.flags, self.sec, self.nsec, \
@@ -149,6 +150,7 @@ def skbparse(if_list, out_f):
 	n = len(if_list)
 	trace_info_list = []
 	reg = re.compile(".*trace\.(?P<channel>((hardirq)|(softirq)|(syscall)))\.cpu(?P<cpu>[0-9]+)")
+	blk_list = []
 	try:
 		for i in range(n):
 			in_f = if_list[i]
@@ -158,22 +160,33 @@ def skbparse(if_list, out_f):
 		try:
 			while True:
 				all_eof = True
-				blk_list = []
-				for i in range(n):
-					in_f, channel, cpu = trace_info_list[i]
+				for in_f, channel, cpu in trace_info_list:
 					try:
 						blk = skbtrace_block(in_f, channel, cpu)
 						blk_list.append(blk)
 						all_eof = False
 					except ValueError:
-						pass
+						pass # FIXME
 				if all_eof:
 					break
-				for blk in blk_list:
+				blk_list.sort()
+				while blk_list:
+					blk = blk_list[0]
 					out_f.write(str(blk) + "\n")
+					del blk_list[0]
+					n = len(blk_list)
+					if n == 0:
+						break
+					next_blk = blk_list[0]
+					if blk.seq + 1 != next_blk.seq:
+						break
 		except KeyboardInterrupt:
 			pass
 	finally:
+		if blk_list:
+			blk_list.sort()
+			for blk in blk_list:
+				out_f.write(str(blk) + "\n")
 		for i in range(n):
 			in_f = if_list[i]
 			in_f.close()
