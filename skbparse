@@ -178,8 +178,7 @@ def skbparse(if_list, out_f):
 					blk = blk_list[0]
 					out_f.write(str(blk) + "\n")
 					del blk_list[0]
-					n = len(blk_list)
-					if n == 0:
+					if 0 == len(blk_list):
 						break
 					next_blk = blk_list[0]
 					if blk.seq + 1 != next_blk.seq:
