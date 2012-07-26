@@ -120,7 +120,7 @@ Opt_parse_table = {
 	"-o" : option(True,  "output-fn", "./skbparse.results",   "The results filename that skbparse will generate"),
 	"-c" : option(False, "per-cpu",    False, "Generate per-cpu skbparse results, default is all-in-one result file"),
 	"-V" : option(False, "verbose",    False, "Show more runtime information"),
-	"-s" : option(False, "stdin",      None,  "Use stdin as skbtrace input source, and write parsed result on stdout"),
+	"-r" : option(False, "real-time",  False,  "Real-time mode, which works together with -s option of skbtrace"),
 	"-S" : option(False, "stdout",     None,  "Write parsed result on stdout"),
 	"-h" : option(False, "",           None,  "Show usage information", show_help),
 	"-v" : option(False, "",           None,  "Show version information", show_version),
@@ -146,6 +146,10 @@ def handle_args(args):
 			value = True
 		callback(Conf_table, conf_name, value)
 
+def should_stop():
+	real_time = conf("real-time") # TODO
+	return True
+
 def skbparse(if_list, out_f):
 	n = len(if_list)
 	trace_info_list = []
@@ -167,7 +171,7 @@ def skbparse(if_list, out_f):
 						all_eof = False
 					except ValueError:
 						pass # FIXME
-				if all_eof:
+				if all_eof and should_stop():
 					break
 				blk_list.sort()
 				while blk_list:
