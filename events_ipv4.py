@@ -44,21 +44,23 @@ class tcp_conn:
 		1<<10 : "CLOSE",
 		1<<11 : "CLOSE_WAIT",
 		1<<12 : "LAST_ACK",
+		1<<13 : "LISTEN",
+		1<<14 : "CLOSING",
 	}
 	action = 102
 	def __init__(self, block, trace):
 		self.blk = block
 		size = block.len - block.common_header_size()
-		self.state = tcp_conn.flags[self.blk.flags]
+		self.state = tcp_conn.flags.get(self.blk.flags, self.blk.flags)
 		data = trace.read(size)
 		if not data:
 			raise ValueError, "invalid tcp_conn block"
-		self.local, size = parse_sockaddr(data)
-		if not size:
+		self.local = None
+		self.peer = None
+		local, size = parse_sockaddr(data)
+		if size:
 			self.local = local
-		if (block.flags & ((1<<8)|(1<<9))):
-			self.peer = None
-		else:
+		if not (block.flags & ((1<<8)|(1<<9))):
 			peer, size = parse_sockaddr(data[size:])
 			if size:
 				self.peer = peer
@@ -119,11 +121,10 @@ class icsk_conn:
 		data = trace.read(size)
 		if not data:
 			raise ValueError, "invalid icsk_conn block"
+		self.local = None
 		local, size = parse_sockaddr(data)
 		if size:
 			self.local = local
-		else:
-			self.local = None
 
 	def __str__(self):
 		s = "action=icsk_conn"
@@ -141,7 +142,9 @@ class tcp_conn_addr:
 		data = trace.read(size)
 		if not data:
 			raise ValueError, "invalid tcp_conn_addr block"
-		self.local, size = parse_sockaddr(data)
+		self.local = None
+		self.peer = None
+		local, size = parse_sockaddr(data)
 		if not size:
 			self.local = local
 		if (block.flags & ((1<<8)|(1<<9))):
