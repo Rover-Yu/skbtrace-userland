@@ -151,12 +151,12 @@ def should_stop():
 	return True
 
 def skbparse(if_list, out_f):
-	n = len(if_list)
+	n_if_list = len(if_list)
 	trace_info_list = []
 	reg = re.compile(".*trace\.(?P<channel>((hardirq)|(softirq)|(syscall)))\.cpu(?P<cpu>[0-9]+)")
 	blk_list = []
 	try:
-		for i in range(n):
+		for i in range(n_if_list):
 			in_f = if_list[i]
 			channel = reg.match(in_f.name).groupdict()["channel"]
 			cpu = reg.match(in_f.name).groupdict()["cpu"]
@@ -170,19 +170,27 @@ def skbparse(if_list, out_f):
 						blk_list.append(blk)
 						all_eof = False
 					except ValueError:
-						pass # FIXME
+						pass #FIXME
 				if all_eof and should_stop():
 					break
 				blk_list.sort()
-				while blk_list:
+				n = len(blk_list)
+				while n > 1:
 					blk = blk_list[0]
-					out_f.write(str(blk) + "\n")
-					del blk_list[0]
-					if 0 == len(blk_list):
-						break
-					next_blk = blk_list[0]
+					next_blk = blk_list[1]
 					if blk.seq + 1 != next_blk.seq:
 						break
+					del blk_list[0]
+					out_f.write(str(blk) + "\n")
+					n-=1
+				if n > 100:
+					blk = blk_list[0]
+					next_blk = blk_list[1]
+					if blk.seq + 1 != next_blk.seq:
+						# It may drop some events
+						del blk_list[0]
+						out_f.write(str(blk) + "\n")
+					
 		except KeyboardInterrupt:
 			pass
 	finally:
@@ -190,7 +198,7 @@ def skbparse(if_list, out_f):
 			blk_list.sort()
 			for blk in blk_list:
 				out_f.write(str(blk) + "\n")
-		for i in range(n):
+		for i in range(n_if_list):
 			in_f = if_list[i]
 			in_f.close()
 		out_f.close()
