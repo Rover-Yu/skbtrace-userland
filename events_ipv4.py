@@ -145,11 +145,9 @@ class tcp_conn_addr:
 		self.local = None
 		self.peer = None
 		local, size = parse_sockaddr(data)
-		if not size:
+		if size:
 			self.local = local
-		if (block.flags & ((1<<8)|(1<<9))):
-			self.peer = None
-		else:
+		if not (block.flags & ((1<<8)|(1<<9))):
 			peer, size = parse_sockaddr(data[size:])
 			if size:
 				self.peer = peer
