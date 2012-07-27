@@ -547,17 +547,13 @@ static void enable_skbtrace(void)
 	skbtrace_dropped_reset();
 	skbtrace_subbuf_setup();
 
-	if (Skb_bpf_program.bf_len > 0) {
-		if (Verbose > 1)
-			bpf_dumpbin(&Skb_bpf_program);
-		skbtrace_filters_enable();
-	}
+	if (Verbose > 1 && Skb_bpf_program.bf_len > 0)
+		bpf_dumpbin(&Skb_bpf_program);
+	skbtrace_filters_enable();
 
-	if (Sock_bpf_program.bf_len > 0) {
-		if (Verbose > 1)
-			bpf_dumpbin(&Sock_bpf_program);
-		skbtrace_sock_filters_enable();
-	}
+	if (Verbose > 1 && Sock_bpf_program.bf_len > 0)
+		bpf_dumpbin(&Sock_bpf_program);
+	skbtrace_sock_filters_enable();
 
 	if (Verbose)
 		fprintf(stderr, "Enabled event list:\n");
