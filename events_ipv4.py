@@ -20,15 +20,15 @@ class tcp_cong:
 		data = trace.read(size)
 		if not data:
 			raise ValueError, "invalid tcp_cong block"
-		fmt = "IIIII"
-		self.rcv_rtt, self.rto, self.cwnd, self.sndnxt, self.snduna = struct.unpack(fmt, data)
+		fmt = "IIII"
+		self.rto, self.cwnd, self.sndnxt, self.snduna = struct.unpack(fmt, data)
 
 	def __str__(self):
 		s = "action=tcp_cong"
+		s += " state=%s" % self.state
 		s += " sk=0x%x" % self.blk.ptr
 		s += " cwnd=%d" % self.cwnd
 		s += " rto=%d" % self.rto
-		s += " rcv_rtt=%d" % self.rcv_rtt
 		s += " sndnxt=%d" % self.sndnxt
 		s += " snduna=%d" % self.snduna
 		return s
