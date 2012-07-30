@@ -118,7 +118,6 @@ Conf_table = {}
 Opt_parse_table = {
 	"-i" : option(True,  "input-dir",  "./skbtrace.results",   "The results directory that skbtrace utility generated"),
 	"-o" : option(True,  "output-fn", "./skbparse.results",   "The results filename that skbparse will generate"),
-	"-c" : option(False, "per-cpu",    False, "Generate per-cpu skbparse results, default is all-in-one result file"),
 	"-V" : option(False, "verbose",    False, "Show more runtime information"),
 	"-r" : option(False, "real-time",  False,  "Real-time mode, which works together with -s option of skbtrace"),
 	"-S" : option(False, "stdout",     None,  "Write parsed result on stdout"),
