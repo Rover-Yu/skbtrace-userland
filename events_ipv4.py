@@ -134,14 +134,14 @@ class icsk_conn:
 			s += " local=%s:%d" % (self.local[0], self.local[1])
 		return s
 
-class tcp_conn_addr:
+class tcp_active_conn:
 	action = 104
 	def __init__(self, block, trace):
 		self.blk = block
 		size = block.len - block.common_header_size()
 		data = trace.read(size)
 		if not data:
-			raise ValueError, "invalid tcp_conn_addr block"
+			raise ValueError, "invalid tcp_active_conn block"
 		self.local = None
 		self.peer = None
 		local, size = parse_sockaddr(data)
@@ -153,7 +153,7 @@ class tcp_conn_addr:
 				self.peer = peer
 
 	def __str__(self):
-		s = "action=tcp_conn_addr"
+		s = "action=tcp_active_conn"
 		s += " sk=0x%x" % self.blk.ptr
 		s += " state=ESTABLISHED"
 		if self.local:
@@ -189,4 +189,4 @@ class tcp_rttm:
 
 
 events_list = [tcp_cong, tcp_conn, tcp_sendlim,\
-		icsk_conn, tcp_conn_addr, tcp_rttm]
+		icsk_conn, tcp_active_conn, tcp_rttm]
