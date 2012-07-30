@@ -187,6 +187,24 @@ class tcp_rttm:
 		s += " mdev_max=%d" % self.mdev_max
 		return s
 
+class tcp_ca_state:
+	action = 106
+	flags = {
+		1<<0 : "Open",
+		1<<1 : "Disorder",
+		1<<2 : "CWR",
+		1<<3 : "Recovery",
+		1<<4 : "Loss",
+	}
+	def __init__(self, block, trace):
+		self.blk = block
+		self.state = tcp_ca_state.flags.get(self.blk.flags, "Unknown")
+
+	def __str__(self):
+		s = "action=tcp_ca_state"
+		s += " sk=0x%x" % self.blk.ptr
+		s += " state=%s" % self.state
+		return s
 
 events_list = [tcp_cong, tcp_conn, tcp_sendlim,\
-		icsk_conn, tcp_active_conn, tcp_rttm]
+		icsk_conn, tcp_active_conn, tcp_rttm, tcp_ca_state]
