@@ -18,10 +18,14 @@ def parse_sockaddr(sockaddr):
 		sin_addr = sockaddr[4:4+SZ_ADDR_IN4]
 		addr = socket.inet_ntop(socket.AF_INET, sin_addr)
 		sz = SZ_SOCKADDR_IN4
+	elif family == socket.AF_INET6:
+		sin6_port = sockaddr[2:2+2]
+		port = (ord(sin6_port[0]) << 8) + ord(sin6_port[1])
+		sin6_addr = sockaddr[8:8+SZ_ADDR_IN6]
+		addr = socket.inet_ntop(socket.AF_INET6, sin6_addr)
+		sz = SZ_SOCKADDR_IN6
 	else:
-		addr = "Not-IPv4"
-		port = 0
-		sz = 0
+		return ("family-%d-addr" % family, 0), 0
 	return (addr, port), sz
 
 channel_table = {
