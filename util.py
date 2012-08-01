@@ -38,6 +38,6 @@ def open_file(fn, mode):
 	try:
 		return file(fn, mode)
 	except IOError, OSError:
-		print "Can't open", ifn
+		print "Can't open", fn
 		sys.exit(1)
 
