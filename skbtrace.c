@@ -1054,7 +1054,6 @@ exit_getopt:
 	fprintf(stderr, "Search path for skbtrace.conf = %s\n", Conf_pathlist);
 	fprintf(stderr, "Debugfs mount path = %s\n", Debugfs_path);
 	fprintf(stderr, "Results output path = %s\n", Output_path);
-	fprintf(stderr, "Tracing during time = %d secs\n", Stop_timeout);
 	fprintf(stderr, "Relayfs subbuf size = %d Bytes\n", Subbuf_size);
 	fprintf(stderr, "Relayfs subbuf count = %d\n", Subbuf_nr);
 	if (!Stop_timeout)
