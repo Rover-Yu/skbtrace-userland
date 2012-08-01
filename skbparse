@@ -153,7 +153,6 @@ def skbparse(if_list, out_f):
 	n_if_list = len(if_list)
 	trace_info_list = []
 	reg = re.compile(".*trace\.(?P<channel>((hardirq)|(softirq)|(syscall)))\.cpu(?P<cpu>[0-9]+)")
-	blk_list = []
 	try:
 		for i in range(n_if_list):
 			in_f = if_list[i]
@@ -161,42 +160,16 @@ def skbparse(if_list, out_f):
 			cpu = reg.match(in_f.name).groupdict()["cpu"]
 			trace_info_list.append((in_f, channel, cpu))
 		try:
-			while True:
-				all_eof = True
-				for in_f, channel, cpu in trace_info_list:
-					try:
+			for in_f, channel, cpu in trace_info_list:
+				try:
+					while True:
 						blk = skbtrace_block(in_f, channel, cpu)
-						blk_list.append(blk)
-						all_eof = False
-					except ValueError:
-						pass #FIXME
-				if all_eof and should_stop():
-					break
-				blk_list.sort()
-				n = len(blk_list)
-				while n > 1:
-					blk = blk_list[0]
-					next_blk = blk_list[1]
-					if blk.seq + 1 != next_blk.seq:
-						break
-					del blk_list[0]
-					out_f.write(str(blk) + "\n")
-					n-=1
-				if n > 100:
-					blk = blk_list[0]
-					next_blk = blk_list[1]
-					if blk.seq + 1 != next_blk.seq:
-						# It may drop some events
-						del blk_list[0]
 						out_f.write(str(blk) + "\n")
-					
+				except ValueError:
+					pass #FIXME
 		except KeyboardInterrupt:
-			pass
+			sys.stderr.write("\nCtrl-C interrupted\n")
 	finally:
-		if blk_list:
-			blk_list.sort()
-			for blk in blk_list:
-				out_f.write(str(blk) + "\n")
 		for i in range(n_if_list):
 			in_f = if_list[i]
 			in_f.close()
