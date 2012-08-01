@@ -1,6 +1,7 @@
 #! /usr/bin/python
 
 import struct
+import socket
 
 class rps_info:
 	action = 1
@@ -23,10 +24,10 @@ class rps_info:
 		s += " rx-hash=0x%x" % self.rx_hash
 		s += " cpu=0x%x" % self.cpu
 		s += " ifindex=%d" % self.ifindex
-		s += " src=0x%x" % self.src
-		s += " dst=0x%x" % self.dst
-		s += " sport=%d" % self.sport
-		s += " dport=%d" % self.dport
+		s += " src=%s" % socket.inet_ntop(socket.AF_INET, self.src)
+		s += " dst=%s" % socket.inet_ntop(socket.AF_INET, self.dst)
+		s += " sport=%d" % socket.ntohs(self.sport)
+		s += " dport=%d" % socket.ntohs(self.dport)
 		s += " proto=0x%x" % self.proto
 		return s
 
