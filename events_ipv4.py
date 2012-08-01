@@ -101,6 +101,7 @@ class tcp_sendlim:
 	def __str__(self):
 		s = "action=tcp_sendlim"
 		s += " sk=0x%x" % self.blk.ptr
+		s += " reason=%s" % self.reason
 		s += " begin=%d.%d" % (self.sec, self.nsec)
 		s += " cnt=%d" % self.cnt
 		if (1<<11) & self.blk.flags: #OK
