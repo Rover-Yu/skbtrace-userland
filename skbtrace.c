@@ -754,32 +754,53 @@ if (Verbose > 1 && nr_events) {
 }
 
 		while (--nr_events >= 0) {
-			ssize_t total, offset;
+			ssize_t total, page_start, page_offset;
  			
 			if (events[nr_events].events & EPOLLERR)
 				return err_msg("epoll_wait()");
 			tracing = (tracing_t*)events[nr_events].data.ptr;
-			total = Subbuf_size*Subbuf_nr;
+			total = Subbuf_size*Subbuf_nr + getpagesize() - 1;
+			total = total & (~(getpagesize() - 1));
 			do {
-				if (tracing->buf)
-					munmap(tracing->buf, total + getpagesize());
-				offset = tracing->size & (~(getpagesize() - 1));
-				if (ftruncate(tracing->ofd, tracing->size + total + getpagesize()) < 0)
+				if (ftruncate(tracing->ofd, tracing->size + total) < 0)
 					return err_msg("ftruncate()");
-				tracing->buf = mmap(NULL, total + getpagesize(), PROT_WRITE, MAP_SHARED,
-							tracing->ofd, offset);
+
+				page_start = tracing->size & (~(getpagesize() - 1));
+				page_offset = tracing->size - page_start;
+
+				if (tracing->buf)
+					munmap(tracing->buf, total);
+				tracing->buf = mmap(NULL, total, PROT_WRITE, MAP_SHARED,
+							tracing->ofd, page_start);
 				if (MAP_FAILED == tracing->buf)
 					return err_msg("mmap()");
-				done = read(tracing->ifd, tracing->buf + tracing->size - offset, total);
+
+				done = read(tracing->ifd, tracing->buf + page_offset, total);
 				if (done > 0) {
 					tracing->size += done;
 					if (On_stdout) {
+
+
 						/*
 						 * The event data still write into disks, just use pipe
 						 * to notify otherone (e.g. skbparse) to process them.
 						 */
 						pthread_spin_lock(&Stdout_lock);
 						printf("%lu %lu %lu\n", cpu, tracing->channel, done);
+if (Verbose > 2)
+{
+						struct skbtrace_block *b;
+						long b_offset = 0;
+
+						while (b_offset < done) {
+							b = tracing->buf + page_offset + b_offset;
+							printf("\tseq=%lu magic=%lx action=%x len=%d\n",
+								(long)b->seq, (long) b->magic, b->action, b->len);
+							if (!b->len)
+								break;
+							b_offset += b->len;
+						}
+}
 						pthread_spin_unlock(&Stdout_lock);
 					}
 				} else if (!done || EAGAIN == errno)
@@ -790,7 +811,7 @@ if (Verbose > 1)
 {
 				fprintf(stderr, "cpu=%ld ifd=%d ofd=%d offset=%ld read=%ld size=%ld\n",
 						cpu, tracing->ifd, tracing->ofd,
-						offset, done,tracing->size + (done > 0 ? done : 0));
+						page_start, done,tracing->size + (done > 0 ? done : 0));
 }
 			} while (1);
 		}
