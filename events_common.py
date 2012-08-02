@@ -12,7 +12,7 @@ class rps_info:
 		if not data:
 			raise ValueError, "invalid rps_info block"
 		queue_fmt = "Hxx"
-		rest_fmt = "IIIIIHHBxxx"
+		rest_fmt = "IIIIIHHI"
 		self.rx_queue = struct.unpack(queue_fmt, data[0:4])
 		self.rx_hash, self.cpu, self.ifindex, self.src, self.dst, \
 			self.sport, self.dport, self.proto = struct.unpack(rest_fmt, data[4:])
@@ -24,8 +24,8 @@ class rps_info:
 		s += " rx-hash=0x%x" % self.rx_hash
 		s += " cpu=0x%x" % self.cpu
 		s += " ifindex=%d" % self.ifindex
-		s += " src=%s" % socket.inet_ntop(socket.AF_INET, self.src)
-		s += " dst=%s" % socket.inet_ntop(socket.AF_INET, self.dst)
+		s += " src=%x" % self.src
+		s += " dst=%x" % self.dst
 		s += " sport=%d" % socket.ntohs(self.sport)
 		s += " dport=%d" % socket.ntohs(self.dport)
 		s += " proto=0x%x" % self.proto
