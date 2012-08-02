@@ -171,8 +171,8 @@ class tcp_rttm:
 		data = trace.read(size)
 		if not data:
 			raise ValueError, "invalid tcp_rttm block"
-		fmt = "IIIIIII"
-		self.snd_una, self.rtt_seq, self.rtt, self.rttvar,\
+		fmt = "IIIIIIII"
+		pad, self.snd_una, self.rtt_seq, self.rtt, self.rttvar,\
 			self.srtt, self.mdev, self.mdev_max = \
 						struct.unpack(fmt, data)
 
