@@ -10,7 +10,6 @@ class tcp_cong:
 		1<<6 :	"FastRtx",
 		1<<7 :	"FRTO",
 		1<<8 :	"FRTO-Loss",
-		1<<9 :	"Leave",
 	}
 	action = 101
 	def __init__(self, block, trace):
