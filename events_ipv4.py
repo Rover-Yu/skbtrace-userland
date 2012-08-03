@@ -199,11 +199,57 @@ class tcp_ca_state:
 	def __init__(self, block, trace):
 		self.blk = block
 		self.state = tcp_ca_state.flags.get(self.blk.flags, "Unknown")
+		size = block.len - block.common_header_size()
+		data = trace.read(size)
+		if not data:
+			raise ValueError, "invalid tcp_ca_state block"
+		fmt = "I" * 20
+		self.cwnd,\
+		self.rto,\
+		self.snduna,\
+		self.sndnxt,\
+		self.snd_ssthresh,\
+		self.snd_wnd,\
+		self.rcv_wnd,\
+		self.high_seq,\
+		self.packets_out,\
+		self.lost_out,\
+		self.retrans_out,\
+		self.sacked_out,\
+		self.fackets_out,\
+		self.prior_ssthresh,\
+		self.undo_marker,\
+		self.undo_retrans,\
+		self.total_retrans,\
+		self.reordering,\
+		self.prior_cwnd,\
+		self.mss_cache = struct.unpack(fmt, data)
 
 	def __str__(self):
 		s = "action=tcp_ca_state"
 		s += " sk=0x%x" % self.blk.ptr
 		s += " state=%s" % self.state
+
+		s += " cwnd=%d" % self.cwnd
+		s += " rto=%d" % self.rto
+		s += " snduna=%d" % self.snduna
+		s += " sndnxt=%d" % self.sndnxt
+		s += " snd_ssthresh=%d" %     self.snd_ssthresh
+		s += " snd_wnd=%d" %          self.snd_wnd
+		s += " rcv_wnd=%d" %          self.rcv_wnd
+		s += " high_seq=%d" %         self.high_seq
+		s += " packets_out=%d" %      self.packets_out
+		s += " lost_out=%d" %         self.lost_out
+		s += " retrans_out=%d" %      self.retrans_out
+		s += " sacked_out=%d" %       self.sacked_out
+		s += " fackets_out=%d" %      self.fackets_out
+		s += " prior_ssthresh=%d" %   self.prior_ssthresh
+		s += " undo_marker=%d" %      self.undo_marker
+		s += " undo_retrans=%d" %     self.undo_retrans
+		s += " total_retrans=%d" %    self.total_retrans
+		s += " reordering=%d" %       self.reordering
+		s += " prior_cwnd=%d" %       self.prior_cwnd
+		s += " mss_cache=%d" %	self.mss_cache
 		return s
 
 events_list = [tcp_cong, tcp_conn, tcp_sendlim,\
