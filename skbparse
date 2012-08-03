@@ -77,9 +77,9 @@ class skbtrace_block:
 			self.seq, self.ptr = struct.unpack(fmt, binary)
 
 	def __str__(self):
-		s = "%ld %ld.%ld cpu=%s channel=%s " % \
-			(self.seq, self.sec, self.nsec, \
-			self.cpu, self.channel)
+		s = "%ld %ld.%ld" % (self.seq, self.sec, self.nsec)
+		if conf("detail"):
+			s += " cpu=%s channel=%s " % (self.cpu, self.channel)
 		try:
 			s += str(self.event2)
 		except AttributeError:
@@ -131,7 +131,8 @@ Conf_table = {}
 Opt_parse_table = {
 	"-i" : option(True,  "input-dir",  "./skbtrace.results",   "The results directory that skbtrace utility generated"),
 	"-o" : option(True,  "output-fn", "./skbparse.results",   "The results filename that skbparse will generate"),
-	"-V" : option(False, "verbose",    False, "Show more runtime information"),
+	"-V" : option(False, "verbose",    False, "Show more runtime configuration information"),
+	"-d" : option(False, "detail",     False,  "Show more details in output of parsed events"),
 	"-r" : option(False, "real-time",  False,  "Real-time mode, which works together with -s option of skbtrace"),
 	"-S" : option(False, "stdout",     None,  "Write parsed result on stdout"),
 	"-h" : option(False, "",           None,  "Show usage information", show_help),
