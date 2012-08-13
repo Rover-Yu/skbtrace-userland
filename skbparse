@@ -53,8 +53,13 @@ class skbtrace_block:
         	self.seq = 0
 		self.ptr = 0
 		self.__load(trace)
-		event_class = Action_table.get(self.action, unknown_block)
-		self.event2 = event_class(self, trace)
+		event_class_list = Action_table.get(self.action, unknown_block)
+		for event_class in event_class_list:
+			try:
+				self.event2 = event_class(self, trace)
+				break
+			except ValueError:
+				self.event2 = None
 
 	def common_header_size(self):
 		s = struct.calcsize("L") # magic
@@ -195,7 +200,9 @@ def skbparse(if_list, out_f):
 def setup_action_table():
 	for m in (events_common, events_ipv4):
 		for e in m.events_list:
-			Action_table[e.action] = e
+			event_class_list = Action_table.get(e.action, [])
+			event_class_list.append(e)
+			Action_table[e.action] = event_class_list
 
 def open_input():
 	input_dir = conf("input-dir")
