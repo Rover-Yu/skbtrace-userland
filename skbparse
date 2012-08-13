@@ -59,6 +59,7 @@ class skbtrace_block:
 				self.event2 = event_class(self, trace)
 				break
 			except ValueError:
+				trace.seek(-block.len, 1)
 				self.event2 = None
 
 	def common_header_size(self):
