@@ -1,7 +1,7 @@
 /*
  *  skbtrace - sk_buff trace utilty
  *
- * 	User/Kernel Interface
+ *	User/Kernel Interface
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
 #ifndef _NET_SKBTRACE_API_IPV4_H
 #define _NET_SKBTRACE_API_IPV4_H
 
-#include <asm/types.h>
+#include <linux/types.h>
 
 #ifdef __KERNEL__
 #include <linux/in.h>
@@ -38,6 +38,9 @@ enum {
 	skbtrace_action_tcp_congestion	= 101,
 	skbtrace_action_tcp_connection	= 102,
 	skbtrace_action_tcp_sendlimit	= 103,
+	skbtrace_action_tcp_active_conn	= 104,
+	skbtrace_action_tcp_rttm	= 105,
+	skbtrace_action_tcp_ca_state	= 106,
 	skbtrace_action_tcp_max		= 199,
 };
 
@@ -55,14 +58,13 @@ enum {
 
 struct skbtrace_tcp_cong_blk {
 	struct skbtrace_block blk;
-	__u32	rcv_rtt;
 	__u32	rto;
 	__u32	cwnd;
 	__u32	sndnxt;
 	__u32	snduna;
 } __packed;
 
-/* TCP basic connection events (101) */
+/* TCP basic connection events */
 struct skbtrace_tcp_conn_blk {
 	struct skbtrace_block blk;
 	union {
@@ -81,7 +83,7 @@ struct skbtrace_tcp_conn_blk {
 	} addr;
 } __packed;
 
-/* TCP send limit event (102) */
+/* TCP send limit event */
 enum {
 	skbtrace_tcp_sndlim_cwnd	= 4,
 	skbtrace_tcp_sndlim_swnd	= 5,
@@ -93,24 +95,77 @@ enum {
 	skbtrace_tcp_sndlim_ok		= 11,
 };
 
+
+/* val member:
+ *    skbtrace_tcp_sndlim_other: the return value of tcp_transmit_skb()
+ *    skbtrace_tcp_sndlim_ok: total sent pkts
+ *    other cases: send limit occurs under MTU probe if 1, otherwise, it is 0
+ */
 struct skbtrace_tcp_sendlim_blk {
 	struct skbtrace_block blk;
-	__u32 val;	/* val :
-			 * 	skbtrace_tcp_sndlim_other: the return value of tcp_transmit_skb()
-			 * 	skbtrace_tcp_sndlim_ok: total sent pkts
-			 * 	other cases: send limit occurs under MTU probe if 1, otherwise, it is 0
-			 */
+	__u32 val;
 	__u32 count;
 	struct timespec begin;
-	union {
-		struct {
-			__u32	snd_ssthresh;
-			__u32	snd_cwnd;
-			__u32	snd_cwnd_cnt;
-		};
-		__u32	snd_wnd;
-	};
+	__u32	snd_ssthresh;
+	__u32	snd_cwnd;
+	__u32	snd_cwnd_cnt;
+	__u32	snd_wnd;
 } __packed;
+
+/* TCP active connections */
+/* Use skbtrace_tcp_conn_blk */
+
+/* TCP RTTM */
+struct skbtrace_tcp_rttm_blk {
+	struct skbtrace_block blk;
+	__u32 pad;
+	__u32 snd_una;
+	__u32 rtt_seq;
+	__u32 rtt;
+	__u32 rttvar;
+	__u32 srtt;
+	__u32 mdev;
+	__u32 mdev_max;
+} __packed;
+
+/* TCP CA state */
+struct skbtrace_tcp_ca_state_blk {
+	struct skbtrace_block blk;
+
+        __u32	cwnd;
+        __u32	rto;
+        __u32	snduna;
+        __u32	sndnxt;
+
+        __u32	snd_ssthresh;
+        __u32	snd_wnd;
+        __u32	rcv_wnd;
+        __u32	high_seq;
+
+        __u32	packets_out;
+        __u32	lost_out;
+        __u32	retrans_out;
+        __u32	sacked_out;
+
+        __u32	fackets_out;
+        __u32	prior_ssthresh;
+        __u32	undo_marker;
+        __u32	undo_retrans;
+
+        __u32	total_retrans;
+        __u32	reordering;
+        __u32	prior_cwnd;
+        __u32	mss_cache;
+
+} __packed;
+
+/* TCP timer flags */
+enum {
+	skbtrace_tcp_timer_rexmit = skbtrace_sk_timer_last + 1,
+	skbtrace_tcp_timer_probe,
+	skbtrace_tcp_timer_keepalive,
+	skbtrace_tcp_timer_delack,
+};
 
 /********************* icsk section *********************/
 
@@ -121,6 +176,6 @@ enum {
 	skbtrace_action_icsk_max	= 299,
 };
 
-/* Use skbtrace_tcp_conn_blk */
+/* Use skbtrace_tcp_active_conn */
 
 #endif

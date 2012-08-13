@@ -1,7 +1,7 @@
 /*
  *  skbtrace - sk_buff trace utilty
  *
- * 	User/Kernel Interface
+ *	User/Kernel Interface
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,14 +23,16 @@
 #ifndef _NET_SKBTRACE_API_COMMON_H
 #define _NET_SKBTRACE_API_COMMON_H
 
-#include <asm/types.h>
+#include <linux/types.h>
 
 /********************* Common section *********************/
 
 /* skbtrace_block->action */
 enum {
+	skbtrace_action_invalid		= 0,
 	skbtrace_action_common_min	= 1,
 	skbtrace_action_skb_rps_info	= 1,
+	skbtrace_action_sk_timer	= 2,
 	skbtrace_action_common_max	= 99,
 };
 
@@ -44,26 +46,41 @@ enum {
 	skbtrace_flags_reserved_max = 3,
 };
 
-/* it is copied from <net/flow_keys.h>, except that "__packed" */
-struct __flow_keys {
+/* it is copied from <net/flow_keys.h>, except pad fields and packed */
+struct skbtrace_flow_keys {
 	__u32 src;
 	__u32 dst;
 	union {
 		__u32 ports;
 		__u16 port16[2];
 	};
-	__u8 ip_proto;
+	__u32 ip_proto;
 } __packed;
 
 struct skbtrace_skb_rps_info_blk {
 	struct skbtrace_block blk;
 	__u16 rx_queue;
-	__u16 pad0;
+	__u16 pad;
 	__u32 rx_hash;
 	__u32 cpu;
 	__u32 ifindex;
-	struct __flow_keys keys;
-	__u8 pad1[3];
+	struct skbtrace_flow_keys keys;
+} __packed;
+
+
+/* socket timers */
+/* flags */
+enum {
+	skbtrace_sk_timer_setup	= 4,
+	skbtrace_sk_timer_reset	= 5,
+	skbtrace_sk_timer_stop	= 6,
+	skbtrace_sk_timer_last	= 6,
+};
+
+struct skbtrace_sk_timer_blk {
+	struct skbtrace_block blk;
+	__s32	proto;
+	__s32	timeout;
 } __packed;
 
 #endif
