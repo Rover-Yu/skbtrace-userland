@@ -252,5 +252,47 @@ class tcp_ca_state:
 		s += " mss_cache=%d" %	self.mss_cache
 		return s
 
+class tcp_timer:
+	action = 2
+	flags = {
+		1<<4 : "setup",
+		1<<5 : "reset",
+		1<<6 : "stop",
+		1<<7 : "rexmit",
+		1<<8 : "probe",
+		1<<9 : "keepalive",
+		1<<10 : "delay-ack",
+	}
+	def __init__(self, block, trace):
+		self.blk = block
+		size = block.len - block.common_header_size()
+		data = trace.read(size)
+		if not data:
+			raise ValueError, "invalid sk_timer block"
+		fmt = "II"
+		self.proto, self.timeout, = struct.unpack(fmt, data)
+		if self.proto != IPPROTO_TCP:
+			raise ValueError, "it is not tcp_timer block"
+
+		op_flags = block.flags & (0x70)
+		self.op = tcp_timer.flags.get(op_flags, "unknown")
+
+		timer_flags = block.flags & (0x780)
+		self.timers = []
+		for f in tcp_timer.flags:
+			if f & timer_flags:
+				self.timers.append(tcp_timer.flags[f])
+		self.timers = ",".join(self.timers)
+
+	def __str__(self):
+		s = " action=tcp_timer"
+		s += " sk=0x%x" % self.blk.ptr
+		s += " op=%s" % self.op
+		s += " timers=%s" % self.timers
+		if self.op == "reset":
+			s += " timeout=%dms" % self.timeout
+		return s
+
 events_list = [tcp_cong, tcp_conn, tcp_sendlim,\
-		icsk_conn, tcp_active_conn, tcp_rttm, tcp_ca_state]
+		icsk_conn, tcp_active_conn, tcp_rttm, tcp_ca_state,
+		tcp_timer]
