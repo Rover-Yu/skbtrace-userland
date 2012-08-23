@@ -83,9 +83,9 @@ class skbtrace_block:
 			self.seq, self.ptr = struct.unpack(fmt, binary)
 
 	def __str__(self):
-		s = "%ld %ld.%ld" % (self.seq, self.sec, self.nsec)
+		s = "%ld %ld.%ld " % (self.seq, self.sec, self.nsec)
 		if conf("detail"):
-			s += " cpu=%s channel=%s " % (self.cpu, self.channel)
+			s += "cpu=%s channel=%s " % (self.cpu, self.channel)
 		try:
 			s += str(self.event2)
 		except AttributeError:
