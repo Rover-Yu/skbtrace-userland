@@ -5,11 +5,11 @@ from util import *
 
 class tcp_cong:
 	flags = {
-		1<<4 :	"CWR",
-		1<<5 :	"Loss",	
-		1<<6 :	"FastRtx",
-		1<<7 :	"FRTO",
-		1<<8 :	"FRTO-Loss",
+		1<<0 :	"CWR",
+		1<<1 :	"Loss",
+		1<<2 :	"FastRtx",
+		1<<3 :	"FRTO",
+		1<<4 :	"FRTO-Loss",
 	}
 	action = 101
 	def __init__(self, block, trace):
@@ -34,17 +34,17 @@ class tcp_cong:
 
 class tcp_conn:
 	flags = {
-		1<<4  : "ESTABLISHED",
-		1<<5  : "SYN_SENT",
-		1<<6  : "SYN_RECV",
-		1<<7  : "FIN_WAIT1",
-		1<<8  : "FIN_WAIT2",
-		1<<9  : "TIME_WAIT",
-		1<<10 : "CLOSE",
-		1<<11 : "CLOSE_WAIT",
-		1<<12 : "LAST_ACK",
-		1<<13 : "LISTEN",
-		1<<14 : "CLOSING",
+		1<<1  : "ESTABLISHED",
+		1<<2  : "SYN_SENT",
+		1<<3  : "SYN_RECV",
+		1<<4  : "FIN_WAIT1",
+		1<<5  : "FIN_WAIT2",
+		1<<6  : "TIME_WAIT",
+		1<<7  : "CLOSE",
+		1<<8  : "CLOSE_WAIT",
+		1<<9  : "LAST_ACK",
+		1<<10  : "LISTEN",
+		1<<11 : "CLOSING",
 	}
 	action = 102
 	def __init__(self, block, trace):
@@ -76,14 +76,14 @@ class tcp_conn:
 
 class tcp_sendlim:
 	flags = {
-		1<<4 :     "cwnd",
-		1<<5 :     "swnd",
-		1<<6 :     "nagle",
-		1<<7 :     "tso",
-		1<<8 :     "frag",
-		1<<9 :     "pushone",
-		1<<10 :    "other",
-		1<<11 :    "ok",
+		1<<0 :     "cwnd",
+		1<<1 :     "swnd",
+		1<<2 :     "nagle",
+		1<<3 :     "tso",
+		1<<4 :     "frag",
+		1<<5 :     "pushone",
+		1<<6 :     "other",
+		1<<7 :     "ok",
 	}
 	action = 103
 	def __init__(self, block, trace):
@@ -190,11 +190,11 @@ class tcp_rttm:
 class tcp_ca_state:
 	action = 106
 	flags = {
-		1<<4 : "Open",
-		1<<5 : "Disorder",
-		1<<6 : "CWR",
-		1<<7 : "Recovery",
-		1<<8 : "Loss",
+		1<<0 : "Open",
+		1<<1 : "Disorder",
+		1<<2 : "CWR",
+		1<<3 : "Recovery",
+		1<<4 : "Loss",
 	}
 	def __init__(self, block, trace):
 		self.blk = block
@@ -255,13 +255,13 @@ class tcp_ca_state:
 class tcp_timer:
 	action = 2
 	flags = {
-		1<<4 : "setup",
-		1<<5 : "reset",
-		1<<6 : "stop",
-		1<<7 : "rexmit",
-		1<<8 : "probe",
-		1<<9 : "keepalive",
-		1<<10 : "delay-ack",
+		1<<0 : "setup",
+		1<<1 : "reset",
+		1<<2 : "stop",
+		1<<4 : "rexmit",
+		1<<5 : "probe",
+		1<<6 : "keepalive",
+		1<<7 : "delay-ack",
 	}
 	def __init__(self, block, trace):
 		self.blk = block
