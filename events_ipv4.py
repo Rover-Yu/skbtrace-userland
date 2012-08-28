@@ -274,10 +274,10 @@ class tcp_timer:
 		if self.proto != IPPROTO_TCP:
 			raise ValueError, "it is not tcp_timer block"
 
-		op_flags = block.flags & (0x70)
+		op_flags = block.flags & (0xf)
 		self.op = tcp_timer.flags.get(op_flags, "unknown")
 
-		timer_flags = block.flags & (0x780)
+		timer_flags = block.flags & (0xf0)
 		self.timers = []
 		for f in tcp_timer.flags:
 			if f & timer_flags:
