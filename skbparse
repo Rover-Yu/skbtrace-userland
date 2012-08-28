@@ -234,3 +234,6 @@ if __name__ == "__main__":
 		map(lambda x: sys.stdout.write("\t" + x.name + "\n"), if_list)
 		print "skbparse result file:", of.name
 	skbparse(if_list, of)
+	of.close()
+	sort = "sort -n %s > %s.sort" % (of.name, of.name)
+	os.system(sort)
