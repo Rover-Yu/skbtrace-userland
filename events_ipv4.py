@@ -198,7 +198,8 @@ class tcp_ca_state:
 	}
 	def __init__(self, block, trace):
 		self.blk = block
-		self.state = tcp_ca_state.flags.get(self.blk.flags, "Unknown")
+		unk = "Unknown-0x%x" % self.blk.flags
+		self.state = tcp_ca_state.flags.get(self.blk.flags, unk)
 		size = block.len - block.common_header_size()
 		data = trace.read(size)
 		if not data:
