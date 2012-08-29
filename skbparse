@@ -42,6 +42,9 @@ class unknown_block:
 		return s
 
 class skbtrace_block:
+	flags = {
+		1<<28 : "miss-snd-blocks,"
+	}
 	def __init__(self, trace, channel, cpu):
 		global Action_table
 		self.channel = channel
@@ -81,11 +84,19 @@ class skbtrace_block:
 		fmt = "LHHILLLL"
 		self.magic, self.len, self.action, self.flags, self.sec, self.nsec, \
 			self.seq, self.ptr = struct.unpack(fmt, binary)
+		common_flags = self.flags & 0xf0000000
+		self.flags &= ~(0xf0000000)
+		self.desc = ""
+		for f in skbtrace_block.flags:
+			if f & common_flags:
+				self.desc += skbtrace_block.flags[f]
 
 	def __str__(self):
 		s = "%ld %ld.%ld " % (self.seq, self.sec, self.nsec)
 		if conf("detail"):
 			s += "cpu=%s channel=%s " % (self.cpu, self.channel)
+		if self.desc:
+			s += "flags=" + self.desc[:-1] + " "
 		try:
 			s += str(self.event2)
 		except AttributeError:
