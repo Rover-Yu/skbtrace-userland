@@ -396,7 +396,7 @@ retry:
 	return;
 
 mount:
-	mount("", Debugfs_path, "debugfs", 0UL, NULL);
+	mount(NULL, Debugfs_path, "debugfs", 0UL, NULL);
 	tried_mount = true;
 	goto retry;
 }
