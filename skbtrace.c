@@ -558,13 +558,13 @@ static void skbtrace_subbuf_setup(void)
 
 	sprintf(buf, "%d", Subbuf_size);
 	if (!append_one_line(Debugfs_path, SKBTRACE_SUBBUF_SIZE_PATH, buf)) {
-		fprintf(stderr, "Failed to setup subbuf_size=%s: %s\n", buf, strerror(errno));
+		fprintf(stderr, "Failed to setup subbuf_size=%s: %m\n", buf);
 		exit(1);
 	}
 
 	sprintf(buf, "%d", Subbuf_nr);
 	if (!append_one_line(Debugfs_path, SKBTRACE_SUBBUF_NR_PATH, buf)) {
-		fprintf(stderr, "Failed to setup subbuf_nr=%s: %s\n", buf, strerror(errno));
+		fprintf(stderr, "Failed to setup subbuf_nr=%s: %m\n", buf);
 		exit(1);
 	}
 }
@@ -964,11 +964,11 @@ static void start_tracing(void)
 	if (Cmd_line) {
 		pid = fork();
 		if (pid < 0) {
-			fprintf(stderr, "fork() failed: %s\n", strerror(errno));
+			fprintf(stderr, "fork() failed: %m\n");
 			exit(1);
 		} else if (0 == pid) {
 			execvp(Cmd_line[0], Cmd_line);
-			fprintf(stderr, "exec() failed: %s\n", strerror(errno));
+			fprintf(stderr, "exec() failed: %m\n");
 			exit(1);
 		}
 	}
@@ -996,8 +996,7 @@ static void processors_mask_init(void)
 
         Nr_processors = sysconf(_SC_NPROCESSORS_ONLN);
         if (Nr_processors < 0) {
-                fprintf(stderr, "sysconf(_SC_NPROCESSORS_ONLN) failed %d/%s\n",
-                        errno, strerror(errno));
+                fprintf(stderr, "sysconf(_SC_NPROCESSORS_ONLN) failed: %m\n");
 		exit(1);
         }
 	Processors_mask = malloc(sizeof(int)*Nr_processors);
