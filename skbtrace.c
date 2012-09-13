@@ -925,6 +925,7 @@ static void start_tracing(void)
 			exit(1);
 		} else if (0 == pid) {
 			execvp(Cmd_line[0], Cmd_line);
+			fprintf(stderr, "exec() failed: %s\n", strerror(errno));
 			exit(1);
 		}
 	}
