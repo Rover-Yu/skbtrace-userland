@@ -23,6 +23,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <dirent.h>
 #include <fcntl.h>
@@ -35,6 +36,7 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mount.h>
 #include <sys/vfs.h>
 #include <sys/mman.h>
 #include <sys/param.h>
@@ -128,8 +130,10 @@ struct event {
 	char name[];
 };
 
-static void *append_data(const char *dir, const char *fn, void *data, int nr_bytes);
-static char *read_one_line(const char *dir, const char *fn, FILE **fp, char **line, size_t *len);
+static void *append_data(const char *dir, const char *fn,
+				void *data, int nr_bytes);
+static char *read_one_line(const char *dir, const char *fn,
+				FILE **fp, char **line, size_t *len);
 static char *append_one_line(const char *dir, const char *fn, char *line);
 static int add_one_event(char *event_spec);
 
@@ -350,8 +354,12 @@ static void show_usage(char *argv[])
 static void check_debugfs(void)
 {
 	struct statfs stfs;
+	bool tried_mount = false;
 
+retry:
 	if (statfs(Debugfs_path, &stfs) < 0 || stfs.f_type != (long)DEBUGFS_TYPE) {
+		if (!tried_mount)
+			goto mount;
 		fprintf(stderr, "Invalid debug path %s\n", Debugfs_path);
 		exit(1);
 	}
@@ -360,6 +368,12 @@ static void check_debugfs(void)
 		fprintf(stderr, "Failed to load available events\n");
 		exit(1);
 	}
+	return;
+
+mount:
+	mount("", Debugfs_path, "debugfs", 0UL, NULL);
+	tried_mount = true;
+	goto retry;
 }
 
 static void show_skbtrace_events(void)
