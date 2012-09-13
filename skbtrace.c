@@ -133,7 +133,7 @@ struct event {
 static void *append_data(const char *dir, const char *fn,
 				void *data, int nr_bytes);
 static char *read_one_line(const char *dir, const char *fn,
-				FILE **fp, char **line, size_t *len);
+			FILE **fp, char **line, size_t *len, int *err);
 static char *append_one_line(const char *dir, const char *fn, char *line);
 static int add_one_event(char *event_spec);
 
@@ -211,10 +211,17 @@ static inline char *skbtrace_version(void)
 	FILE *fp = NULL;
 	char *line = NULL;
 	size_t len = 0;
+	int err;
 
-	read_one_line(Debugfs_path, SKBTRACE_VERSION_PATH, &fp, &line, &len);
+	read_one_line(Debugfs_path, SKBTRACE_VERSION_PATH,
+					&fp, &line, &len, &err);
 	if (fp)
 		fclose(fp); /* only care first line */
+	if (err) {
+		fprintf(stderr, "Failed to read %s"
+				SKBTRACE_VERSION_PATH ": %m\n", Debugfs_path);
+		exit(1);
+	}
 	return line;
 }
 
@@ -223,35 +230,46 @@ static inline char *skbtrace_dropped(void)
 	FILE *fp = NULL;
 	char *line = NULL;
 	size_t len = 0;
+	int err;
 
-	read_one_line(Debugfs_path, SKBTRACE_DROPPED_PATH, &fp, &line, &len);
+	read_one_line(Debugfs_path, SKBTRACE_DROPPED_PATH,
+					&fp, &line, &len, &err);
 	if (fp)
 		fclose(fp); /* only care first line */
+	if (err)
+		fprintf(stderr, "Failed to read %s"
+			SKBTRACE_DROPPED_PATH ": %m\n", Debugfs_path);
 	return line;
 }
 
-static char *read_one_line(const char *dir, const char *fn, FILE **fp, char **line, size_t *len)
+static char *read_one_line(const char *dir, const char *fn,
+			FILE **fp, char **line, size_t *len, int *err)
 {
 	char *path;
 
 	if (!*fp) {
 		*line = NULL;
 		path = malloc(strlen(dir) + strlen(fn) + 2);
-		if (!path)
+		if (!path) {
+			*err = ENOMEM;
 			return NULL;
+		}
 		sprintf(path, "%s/%s", dir, fn);
 		*fp = fopen(path, "r");
+		*err = errno;
 		free(path);
 		if (!*fp)
 			return NULL;
 	}
 
 	if (-1 == getline(line, len, *fp)) {
+		*err = errno;
 		fclose(*fp);
 		*fp = NULL;
 		return NULL;
 	}
 	(*line)[strlen(*line) - 1] = '\x0'; /* remove tailing '\n' */
+	*err = 0;
 	return *line;
 }
 
@@ -292,10 +310,12 @@ static int load_available_events(void)
 	char *line = NULL, *end;
 	FILE * fp = NULL;
 	size_t len = 0;
+	int err;
 
 	Available_events = NULL;
 
-	while (read_one_line(Debugfs_path, SKBTRACE_ENABLED_PATH, &fp, &line, &len)) {
+	while (read_one_line(Debugfs_path, SKBTRACE_ENABLED_PATH,
+						&fp, &line, &len, &err)) {
 		struct available_event *e;
 
 		e = malloc(sizeof(struct available_event));
@@ -322,6 +342,11 @@ static int load_available_events(void)
 	}
 	if (line)
 		free(line);
+	if (err) {
+		fprintf(stderr, "Failed to read %s"
+			SKBTRACE_ENABLED_PATH ": %m\n", Debugfs_path);
+		exit(1);
+	}
 	return 0;
 }
 
@@ -495,8 +520,9 @@ static void load_one_conf(const char *dir)
 	char *line = NULL;
 	FILE * fp = NULL;
 	size_t len = 0;
+	int err;
 
-	while (read_one_line(dir, SKBTRACE_CONF, &fp, &line, &len)) {
+	while (read_one_line(dir, SKBTRACE_CONF, &fp, &line, &len, &err)) {
 		if (add_one_event(line)) {
 			fprintf(stderr, "failed to add event '%s'\n", line);
 			break;
@@ -504,6 +530,9 @@ static void load_one_conf(const char *dir)
 	}
 	if (line)
 		free(line);
+	if (err && ENOENT != err)
+		fprintf(stderr, "Failed to read %s"
+				SKBTRACE_CONF ": %m\n", dir);
 }
 
 static void load_conf(void)
