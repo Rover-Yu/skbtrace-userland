@@ -128,8 +128,8 @@ class icsk_conn:
 
 	def __str__(self):
 		s = "action=icsk_conn"
-		s  = " sk=0x%x" % self.blk.ptr
-		s  = " state=LISTEN"
+		s += " sk=0x%x" % self.blk.ptr
+		s += " state=LISTEN"
 		if self.local:
 			s += " local=%s:%d" % (self.local[0], self.local[1])
 		return s
