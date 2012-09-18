@@ -66,13 +66,7 @@ class skbtrace_block:
 				self.event2 = None
 
 	def common_header_size(self):
-		s = struct.calcsize("L") # magic
-		s += struct.calcsize("H") # len
-		s += struct.calcsize("H") # action
-		s += struct.calcsize("I") # flags
-		s += struct.calcsize("LL") # ts
-		s += struct.calcsize("L") # seq
-		s += struct.calcsize("P") # ptr
+		s = struct.calcsize("LHHILLLP") # magic
 		return s
 
 	def __load(self, trace):
@@ -86,22 +80,23 @@ class skbtrace_block:
 			self.seq, self.ptr = struct.unpack(fmt, binary)
 		common_flags = self.flags & 0xf0000000
 		self.flags &= ~(0xf0000000)
-		self.desc = ""
+		desc = []
 		for f in skbtrace_block.flags:
 			if f & common_flags:
-				self.desc += skbtrace_block.flags[f]
+				desc.append(skbtrace_block.flags[f])
+		self.desc = "".join(desc)
 
 	def __str__(self):
-		s = "%ld %ld.%ld " % (self.seq, self.sec, self.nsec)
+		s = ["%ld %ld.%ld " % (self.seq, self.sec, self.nsec)]
 		if conf("detail"):
-			s += "cpu=%s channel=%s " % (self.cpu, self.channel)
+			s += ["cpu=%s channel=%s " % (self.cpu, self.channel)]
 		if self.desc:
-			s += "flags=" + self.desc[:-1] + " "
+			s += ["flags=" + self.desc[:-1] + " "]
 		try:
-			s += str(self.event2)
+			s += [str(self.event2)]
 		except AttributeError:
 			pass
-		return s
+		return "".join(s)
 
 	def __cmp__(self, other):
 		if self.seq < other.seq:

@@ -18,18 +18,18 @@ class rps_info:
 			self.sport, self.dport, self.proto = struct.unpack(rest_fmt, data[4:])
 
 	def __str__(self):
-		s = "action=rps_info"
-		s += " skb=0x%x" % self.blk.ptr
-		s += " rx-queue=%d" % self.rx_queue
-		s += " rx-hash=0x%x" % self.rx_hash
-		s += " cpu=0x%x" % self.cpu
-		s += " ifindex=%d" % self.ifindex
-		s += " src=%x" % self.src
-		s += " dst=%x" % self.dst
-		s += " sport=%d" % socket.ntohs(self.sport)
-		s += " dport=%d" % socket.ntohs(self.dport)
-		s += " proto=0x%x" % self.proto
-		return s
+		s = ["action=rps_info"]
+		s += [" skb=0x%x" % self.blk.ptr]
+		s += [" rx-queue=%d" % self.rx_queue]
+		s += [" rx-hash=0x%x" % self.rx_hash]
+		s += [" cpu=0x%x" % self.cpu]
+		s += [" ifindex=%d" % self.ifindex]
+		s += [" src=%x" % self.src]
+		s += [" dst=%x" % self.dst]
+		s += [" sport=%d" % socket.ntohs(self.sport)]
+		s += [" dport=%d" % socket.ntohs(self.dport)]
+		s += [" proto=0x%x" % self.proto]
+		return "".join(s)
 
 events_list = [rps_info]
 
