@@ -1008,6 +1008,37 @@ static void processors_mask_init(void)
 		Processors_mask[i] = 0;
 }
 
+static void check_path(char *path)
+{
+	char *path_copy, *sep;
+	struct stat buf;
+	int n = 0;
+
+retry:
+	if (0 == stat(path, &buf))
+		return;
+	if (n || ENOENT != errno) {
+		fprintf(stderr, "%s is invalid: %m\n", path);
+		exit(1);
+	}
+
+	n++;
+	path_copy = strdup(path);
+	if (!path_copy)
+		goto retry;
+
+	sep = strchr(path_copy, '/');
+	while (sep && *sep) {
+		*sep = '\x0';
+		mkdir(path_copy, 0);
+		*sep = '/';
+		sep = strchr(sep + 1, '/');
+	}
+	mkdir(path_copy, 0777);
+	free(path_copy);
+	goto retry;
+}
+
 static void handle_args(int argc, char *argv[])
 {
 	int opt;
@@ -1111,6 +1142,8 @@ exit_getopt:
 			Cmd_line[i] = argv[optind+i];
 		}
 	}
+
+	check_path(Output_path);
 
 	if (!Verbose)
 		return;
