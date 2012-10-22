@@ -7,7 +7,7 @@
 :Release: |release|
 :Date: |today|
 
-本手册描述skbtrace用户空间工具的使用方法。
+This manual contains user guide of user space utilities skbtrace and skbparse.
 
 .. toctree::
    :maxdepth: 2

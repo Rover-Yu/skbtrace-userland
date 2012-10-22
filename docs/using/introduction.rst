@@ -2,30 +2,23 @@
 .. _introduction:
 
 ************
-介绍
+Introduction
 ************
 
-动机
+Motivations
 ================
 
-  我注意到blktrace对于文件系统、块子系统甚至内存管理子系统的开发者给予了非常大的帮助。但网络子系统的开发者就没有这么幸运了———— 虽然tcpdump非常好用，但通常他们还是要根据很有限的计数统计调查问题，甚至经常需要逐行分析源代码去了解到底发生了什么问题。一个常见的工作流程是：检查计数器 -> 翻腾源代码 -> 编译代码实验猜想 -> 再次检查计数器，如此反复，直到定位问题。这个过程非常费时，也难于分享经验，甚至详细的问题描述也变得困难。许多用户对协议栈内部并没有足够的了解，难于准备汇报问题，我曾经见过一些“详细的问题报告”，但其实里面包括的有用信息并不多。
+As we known, the blktrace indeed helps Linux file system and block subsystem developers a lot, even it also help them to locate some problems in mm subsystem. However, the networking stack hackers don't have such like good luck, although tcpdump is very very useful, but they still often need to start investigation from limited exported statistics counters, then may directly dig into source code to guess possible solutions, then test their ideas, if good luck doesn't arrive, then start another investigation-guess-test loop. Even, for some performance problems, there have no appropriate counters at all. Now, you see, it is time-costly diffcult process, and it is almost hard to share experiences and report problem, many users have not enough understanding for protocol stack internals, I saw some "detailed reports" actually does not carry useful information to solve problem.
 
-  相对于存储子系统来说，网络子系统面对的外部设备的I/O速率更快，这意味着网络子系统对性能非常敏感。实际上，已经有一些先行者在尝试解决这个问题，他们增加了更详细的性能计数器。例如，Web10G就实现了RFC4898，它可以提供很多基于单条TCP连接的统计信息。Web10G对TCP协议栈的研究者和工程师非常有帮助，它是一个非常有用的项目，问题是，它有一定的性能消耗（在我的虚拟机里，netperf的TCP_STREAM测试大约会降低5% - 10%），而且灵活性不足。
+The networking subsystem is rather performance sensitive than block subsystem in kernel, so I do not want to add too detailed counters directly here. In fact, Some folks already tried to add more statistics counters for detailed performance measuration, e.g. RFC4898 and its implementation Web10g project. Web10g is a great project for researchers and engineers on TCP stack, which exports many valuable per-connection details to userland by procfs or netlink interface. However, it tightly depends on TCP and its implementation, other protocols implementation have to need some duplicated works to archive same goal, and it also has some measurable overhead (5% - 10% in my simple netperf TCP_STREAM benchmark), I think it'd better that such powerful tracing or instrumentation feature should be able to be zero overhead when it is off.
 
-目标
+Goals
 ==============
 
-  Skbtrace试图做到以下几点：
+The skbtrace project is designed to achieve below goals:
 
-* 提供一种能够支持各种协议的可扩展行为跟踪（trace）架构。
-
-* 可以在运行时打开或者关闭全部或者部分功能。关掉时，没有任何性能损耗。 这可以通过jump label (static key) API做到。
-
-* 直接汇报协议栈的个别连接的内部状态，而不是通过间接的计数器累加，这要比计数器更加直接和易于分析。
-
-* 除了提供基于报文的跟踪功能，也提供基于连接的跟踪功能。Skbtrace提供了BPF兼容的过滤机制，同时也可以使用“事件选项”过滤。
-
-* 提供灵活的跟踪事件过滤机制。因为协议栈产生的事件速率非常快，如果没有这种机制，我们就会淹没在数据的海洋中。
-  
-  与blktrace类似，skbtrace也是基于tracepoint基本架构和relay文件系统的。
+* Provide an extendable tracing infrastructure to support various protocols instead of specific one.
+* Zero overhead when this feature is turned off.
+* Directly report tracing details on per-connection/per-skb level instead of exporting information by some summary counters.
+* Provide both BPF based filter capability for sk_buff (packets) and connections.
 

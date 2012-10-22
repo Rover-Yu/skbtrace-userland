@@ -2,148 +2,258 @@
 .. _events:
 
 *******************
-跟踪事件列表
+Trace events list
 *******************
 
-事件选项
+Options
 ===========
 
-许多事件都有控制其具体行为的选项。例如，tcp_congestion事件可以用mask过滤掉那些不感兴趣的拥塞事件。
+The event options are used to tune conditions that events occur, e.g, we can skip CWR events by give mask=CWR option of tcp_congestion event.
 
-还有一些公共选项是所有事件都支持的。
+Below are all common options.
+
+mask
+-----------
+
+Not all events support this option.
+
+This option can be used to skip some uninterested event conditions, e.g, the tcp_congestion event occurs on TCP feels networks is overloaded, the possible conditions are CWR, FRTO, Fast Retransmitation, Loss, FRTO-Loss. If we only care that segments loss conditions, then we can use follow command line option: ::
+
+        -e tcp_congestion,mask=CWR:FRTO:FastRtx
+
+So CWR, FRTO and Fast Retransmitation events do not be recorded at disk.
 
 primary
 -----------
 
-默认情况下，skbtrace对于所有事件都是独立对待的————也就是说，如果你启用了它，并且成功通过了各种过滤操作，skbtrace工具就把它们会记录到磁盘上。很多时候，这个简单模型可以工作得很好，但在有些情况下，它也记录下了很多没有价值的事件。
+By default, all trace events are treated independently. that is, if you enabled it and they are successfully passed a variety of filter operations, then all they will be recorded to disk. In many cases, this simple model works well, but these filtered events still result in a lot of results mixed much valueless and some valuable data in some cases.
 
-有时候我们希望记录的事件更有针对性一些，例如，我们只关心在事件A发生之前的事件B的情况，也就是说，只有在发生了事件A发生的时候，记录之前的事件B才有价值。在这种场景下，在skbtrace里，称事件A为“主事件”，事件B为”从事件“。primary选项的用途，就是建立起主从事件的关联。
+We hope record the event more targeted by create dependency among events, we only care about the event A if and only if any of event B are occured later, that is, it is only valuable to record occured events A before event B occured. In this scenario, we called event B as the "primary event" of event A. The primary option is used to establish this kind of association among events.
 
-例如，使用skbtrace的-e选项时，如果指定了-e tcp_rttm,primary=tcp_congestion，就意味着，只有在发生了tcp_congestion时，才会将它之前发生的tcp_rttm事件从内核的缓冲中记录下来。即tcp_rttm是从事件，tcp_congestion是主事件。
+For example, if we wanted to verify whether significant jitter of RTT can be used to predict possible TCP segments loss, then we may use below command line option: ::
 
-目前实现的限制是：一个主事件可以对应多个从事件，但每个从事件只能从属于一个主事件。最多可记录32个从事件。
+       -e tcp_rttm,primary=tcp_congestion -e tcp_congestion,mask=CWR:FRTO:FastRtx
 
-通用事件
-===========
+In above example, tcp_rttm is a slave event, tcp_congestion is its primary event. Only tcp_rttm events occus before tcp_congestion will be recorded on disks.
+
+The limitation of current implementaton: a primary event can correspond to multiple slave events, but a event can not be as slave event of mulitple primary events at same time. 
+
+You can record up to 32 slave events.
+
+Common events
+===============
+
+Common parsed fields
+---------------------
+
+We will introduce many events, we use skb_rps_info as example to describe common parsed fields: ::
+
+     144574 1347852135.451990372 action=rps_info skb=0xffff880037c7f4c0 rx-queue=0 rx-hash=0x0 cpu=0xffffffff ifindex=1 src=100007f dst=100007f sport=12865 dport=41223 proto=0x6
+
+Fields：
+
+    * 144574                    - sequence, each event has a unique sequence number, the events that have small value of sequence number ocurr before events that have big one.
+    * 1347852135.451990372      - time stamp, the unit is second. 
+    * action=rps_info           - event name, name is rps_info here.
+    * skb=0xffff880037c7f4c0 (or sk=0x.....)    - the memory address of data structure triggers this event. e.g, we may use this magic number to find out further information of corresponding TCP connection.
 
 skb_rps_info
 ------------
 
-   这是一个基于报文的事件，因此需要使用-F选项过滤。
+   Type: packet based event (Need -F option to filter it)
+   Common options: primary
 
-   显示RPS的散列信息。我们知道RPS可以看作是软件模拟实现的RSS。本质是根据报文内容做散列和映射，将相同连接的报文分发到同一个处理器上。
-   这个事件可以显示出RPS用于计算散列计算时的“数据源”。
-
-   一个skbparse解析后的例子 ::
+   To show hash details of RPS. As we know, RPS dispatch received packets onto different processors by hashing packets header.
+   
+   An example of parsed example: ::
 
      144574 1347852135.451990372 action=rps_info skb=0xffff880037c7f4c0 rx-queue=0 rx-hash=0x0 cpu=0xffffffff ifindex=1 src=100007f dst=100007f sport=12865 dport=41223 proto=0x6
+
+   Fields:
+
+    * rx-queue=0        - the rx queue of NIC.
+    * rx-hash=0x0       - computed key of RPS hash.
+    * cpu=0xffffffff    - target CPU.
+    * ifindex=1         - the index of NIC.
+    * src=100007f       - source address, in network byte order.
+    * dst=100007f       - destination address, in network byte order.
+    * sport=12865       - source port, in host byte order.
+    * dport=41223       - destination port, in host byte order.
+    * proto=0x6         - protocol number.
 
 TCP
 ============
 
-　 以下所有事件都是基于连接的事件，因此需要使用-S选项过滤。
+   All of the following events are based on the events of the connection, therefore need to use -S option filtration.
 
 tcp_congestion
 ---------------
-   TCP拥塞事件。可能的类型有
 
-   * CWR。例如ECN机制在接收到ECE标志后，或者发生本地队列拥塞时。
-   * Loss。在没有启用F-RTO机制时，发生了丢包事件，可能是启动重传定时器，或者是根据SACK信息推算出丢包事件。
-   * F-RTO。在启用F-RTO时，发生了丢包事件。
-   * FastRtx。快速重传事件。
+   Common options: mask,primary
 
-　 这个事件支持mask选项，可以用于过滤不关心的拥塞类型，例如，使用tcp_congestion,mask=cwr:fastrtx，就不会记录CWR和快速重传拥塞事件了。
+TCP congestion event.
 
-   一个skbparse解析后的例子::
+A parsed example ::
 
       1378215231 1347620030.225669489 action=tcp_cong state=FRTO-Loss sk=0xffff88062f8bc700 cwnd=32768 rto=201 sndnxt=1076842762 snduna=1076842762
 
+Fields:
+      * state=FRTO-Loss         - The type of congestion, Possible values of::
+             * CWR              - Congestion Window Reduced, e.g. received ECE bit with ECN, or local congestion.
+             * Loss             - Packets loss
+             * FRTO-Loss        - Packets loss with enabled F-RTO.
+             * FRTO             - F-RTO is detecting if RTO is spurious.
+             * FastRtx          - Enter fast retransmitation
+      * cwnd=32768              - Congestion window on congestion occurs, unit: segment
+      * rto=201                 - RTO, unit：ms
+      * sndnxt=1076842762       - TCP SND_NXT
+      * snduna=1076842762       - TCP SND_UNA
+
 tcp_connection
 ---------------
-   基本TCP状态迁移事件。包括除LISTEN状态之外的其他所有基本TCP状态间的变迁动作。
+   Common options: primary   
 
-   一个skbparse解析后的例子::
+   Basic state of TCP connection migration, except LISTEN.
+
+   A parsed example ::
 
       88 1347851487.186018014 action=tcp_conn sk=0xffff880072144780  state=ESTABLISHED local=127.0.0.1:47857 peer=127.0.0.1:55469
 
+Fields:
+    * state=ESTABLISHED         - The new state of a TCP connection
+    * local=127.0.0.1:47857     - The local address/port of a TCP connection
+    * peer=127.0.0.1:55469      - The peer address/port of a TCP connection
+
 icsk_connection
 -----------------
-   基本TCP状态迁移事件。只包括到LISTEN状态的变迁。
+   Common options: primary   
 
-   一个skbparse解析后的例子::
+   Basic state of TCP connection migration, only contains LISTEN.
+
+   A parsed example ::
      
-      144561 1347851976.556067571 action=icsk_conn sk=0xffff880070ec4e40 state=LISTEN local=127.0.0.1:53549
+      144561 1347851976.556067571 action=icsk_conn sk=0xffff880070ec4e40
+      
+Fields:
+        See tcp_connection.
 
 tcp_sendlimit
 ---------------
-   TCP在执行发送操作，可能因为各种原因停下来，这个事件用来记录停下来的原因。
-   
-   * cwnd 因为拥塞窗口限制停止发送
-   * swnd 因为接收窗口限制停止发送
-   * nagle 因为Nagle算法限制停止发送
-   * tso  因为TSO原因停止发送
-   * frag 因为无法拆分过大的报文停止发送。
-   * pushone 因为pushone的标志停止发送。
-   * other 其他停止发送原因（几乎等同于内存不足）
-   * ok 有数据包发送成功。
+   Common options: primary,mask
 
-   这个事件支持mask选项，可以用于过滤不关心的停止原因，例如，使用tcp_sendlimit,mask=ok，就不会记录发送成功的事件了。
+   The reason of TCP stop sending data in tx queue.
 
-   一个skbparse解析后的例子 ::
+   A parsed example ::
 
-      144606 1347852135.453115265 action=tcp_sendlim sk=0xffff880037f96080 reason=ok begin=1347852135.453115265 cnt=1 mtuprobe=1 ssthresh=37 cwnd=10/0 swnd=33920
+      144606 1347852135.453115265 action=tcp_sendlim sk=0xffff880037f96080 reason=ok cnt=1 mtuprobe=1 ssthresh=37 cwnd=10/0 swnd=33920
+
+Fields:
+      * reason=ok       - The reason of stop sending, they are also can used in mask option:
+            * cwnd      - limited by cwnd
+            * swnd      - limited by receiver advertised window
+            * nagle     - limited by Nagle algorithm
+            * tso       - limited by TSO
+            * frag      - limited by failed to fragment
+            * pushone   - limited by PSH
+            * other     - limited by any other reason
+            * ok        - sucessfully sent some data
+      * cnt=1           - how many segments are sucessfully sent
+      * mtuprobe=1      - executing PMTU probe
+      * ssthresh=37     - current slow start threshold
+      * cwnd=10/0       - snd_cwnd/snd_cwnd_cnt
+      * swnd=33920      - current sending window
 
 tcp_ca_state
 --------------
-   TCP连接的拥塞避免算法状态变迁事件，包括：
+   Common options: primary,mask
 
-   * open
-   * disorder
-   * cwr
-   * recovery
-   * loss
+   TCP congestion avoidance state machine event.
 
    这个事件也支持mask选项，可以用于过滤不关心的状态，例如，tcp_ca_state,mask=disorder, 就不会记录切换到乱序状态的事件了。
 
-   一个skbparse解析后的例子 ::
+   A parsed example ::
 
-      1378026600 1347620023.792681609 action=tcp_ca_state sk=0xffff88062f8bc700 state=Disorder cwnd=2 rto=3216 snduna=1076842506 sndnxt=1076842762 snd_ssthresh=7 snd_wnd=32768 rcv_wnd=32768 high_seq=1076842762 packets_out=1 lost_out=0 retrans_out=0 sacked_out=0 fackets_out=0 prior_ssthresh=67 undo_marker=0 undo_retrans=0 total_retrans=4 reordering=28 prior_cwnd=4294967295 mss_cache=16384
+      1378026600 1347620023.792681609 action=tcp_ca_state sk=0xffff88062f8bc700
+      
+Fields:
+      * state=Disorder CA states, they are also can used in mask option: ::
+              * Open
+              * Disorder
+              * CWR
+              * Recovery
+              * Loss
+      * Below are copied from tcp_sock data structure in kernel: ::
+          * cwnd=2
+          * rto=3216
+          * snduna=1076842506
+          * sndnxt=1076842762
+          * snd_ssthresh=7 
+          * snd_wnd=32768 
+          * rcv_wnd=32768 
+          * high_seq=1076842762 
+          * packets_out=1 
+          * lost_out=0 
+          * retrans_out=0 
+          * sacked_out=0 
+          * fackets_out=0 
+          * prior_ssthresh=67 
+          * undo_marker=0
+          * undo_retrans=0
+          * total_retrans=4 
+          * reordering=28 
+          * prior_cwnd=4294967295 
+          * mss_cache=16384
 
 tcp_rttm
 --------------
-   TCP在接收到每个窗口的确认之后执行RTTM时的事件。
+   Common options: primary
 
-   一个skbparse解析后的例子 ::
+   TCP RTT measurement.
+
+   A parsed example ::
 
       144577 1347852135.451990372 action=tcp_rttm sk=0xffff880037f96080 snd_una=256095406 rtt_seq=256095406 rtt=0 rttvar=200 srtt=8 mdev=2 mdev_max=200
 
+Fields:
+    * snd_una=256095406         - current SNA_UNA
+    * rtt_seq=256095406         - current SND_NXT
+    * rtt=0                     - current RTT sample
+    * rttvar=200                - RTTVar
+    * srtt=8                    - Smooth RTT
+    * mdev=2                    - mdev
+    * mdev_max=200              - mdev_max
+
 sk_timer
 -------------
-   各种TCP定时器事件。
+   Common options: primary, mask
 
-   可能的操作包括：
+   TCP timers event
 
-    * setup  初始化定时器
-    * reset　设置定时器
-    * stop　 停止定时器
+   A parsed example ::
 
-   可能的定时器包括：
+      144604 1347852135.453115265  action=tcp_timer sk=0xffff880072422100
 
-    * rexmit　重传定时器
-    * probe　 零窗口探测定时器
-    * keepalive　保活定时器
-    * delack　　　延迟确认定时器
-
-   这个事件支持mask选项，可以用于过滤操作和定时器，例如，tcp_ca_state,mask=probe，就把零窗口探测定时器的所有操作都忽略掉了。
-
-   一个skbparse解析后的例子 ::
-
-      144604 1347852135.453115265  action=tcp_timer sk=0xffff880072422100 op=reset timers=delay-ack timeout=150ms
+Fields:
+     * op=reset         - operations, they are also can used in mask option, possbile values of: ::
+        * setup
+        * reset
+        * stop
+     * timers=delay-ack         - timer, they are also can used in mask option, possbile values of: ::
+        * rexmit        - RTO timer
+        * probe         - Zero window probe timer
+        * keepalive     - Keepalive timer
+        * delack        - Delayed ACK timer.
+     * timeout=150ms    - Timeout, unit: microseconds
 
 tcp_active_conn
 -----------------
- 　记录当前活动TCP连接的信息，每个活动连接只记录一次。这个事件可以用于将其他事件数据中的sk指针转换成具体的连接信息。
+ 　Record address information of current active TCP connections, each active TCP connection only can be record one time.
 
-   一个skbparse解析后的例子 ::
+   A parsed example ::
 
-      144572 1347852135.451990372 action=tcp_active_conn sk=0xffff880037f96080 state=ESTABLISHED local=127.0.0.1:41223 peer=127.0.0.1:12865
+      144572 1347852135.451990372 action=tcp_active_conn sk=0xffff880037f96080
+
+Fields:
+    * state=ESTABLISHED         - Current state of a TCP connection.
+    * local=127.0.0.1:41223     - local address:port
+    * peer=127.0.0.1:12865      - peer address:port

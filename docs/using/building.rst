@@ -2,27 +2,43 @@
 .. _building:
 
 **************
-编译
+Building
 **************
 
-目前skbtrace还在开发中，编译它需要先安装git，以便从github的代码仓库中获取源代码。
+So far, the skbtrace still is under development, it has not an official release. You have to download source code from github.com manually.
 
-另外，编译用户空间工具时，需要libpcap的开发包（Redhat系统上的libpcap-devel，Debian/Ubuntu上的libpcap-dev）。
+To build it, you need:
+* git. To download sources.
+* libpcap and its development package. To build user space utility, that is the RPM package libpcap-devel on Redhat series distributions, or DEB package libpcap-dev on Debian based distributions.
 
-编译skbtrace内核
-==================
-* 在一个空目录下运行：git clone git://github.com/Rover-Yu/skbtrace-kernel.git skbtrace-kernel.git
+Build patched kernel
+===========================
+
+Current source is based on upstream v3.6 kernel.
+
+Steps:
+
+* git clone git://github.com/Rover-Yu/skbtrace-kernel.git skbtrace-kernel.git
 * cd skbtrace-kernel.git
-* 配置内核，确保启用内核配置CONFIG_SKBTRACE和CONFIG_SKBTRACE_IPV4。
-* 编译安装内核，重启系统。
+* Make sure to turn on below kernel configuration:
+     * CONFIG_SKBTRACE
+     * CONFIG_SKBTRACE_IPV4
+     * CONFIG_SKBTRACE_IPV6
+     * (Optional, recommended) CONFIG_JUMP_LABEL
+* Build and install kernel, reboot your system, good luck.
 
-编译skbtrace用户空间工具
+Build user space utilities
 ==========================
-* 在一个空目录下运行：git clone git://github.com/Rover-Yu/skbtrace-userland.git skbtrace-userland.git
+
+Steps:
+
+* git clone git://github.com/Rover-Yu/skbtrace-userland.git skbtrace-userland.git
 * cd skbtrace-userland.git
-* make，它会生成skbtrace [#]_ 和skbparse [#]_ 。
+* make
 
-.. rubric:: 注
+After above steps are done，you should get skbtrace [#]_ and skbparse [#]_
 
-.. [#] skbtrace, 这个工具将内核记录的协议栈跟踪事件记录在磁盘上。
-.. [#] skbparse, 这个工具将skbtrace记录的跟踪数据解析成更易读的文本格式。
+.. rubric:: Notes
+
+.. [#] skbtrace, this utility records traced binary data from kernel into some files
+.. [#] skbparse, this utility parsed binary traced data into human readable text form.
