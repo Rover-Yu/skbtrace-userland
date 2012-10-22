@@ -177,11 +177,11 @@ tcp_ca_state
       
 Fields:
       * state=Disorder CA states, they are also can used in mask option: ::
-              * Open
-              * Disorder
-              * CWR
-              * Recovery
-              * Loss
+              * open
+              * disorder
+              * cwr
+              * recovery
+              * loss
       * Below are copied from tcp_sock data structure in kernel: ::
           * cwnd=2
           * rto=3216
