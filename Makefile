@@ -7,10 +7,10 @@ ALL = $(PROGS)
 
 #SSH_TARGET = 192.168.43.133
 #SSH_TARGET=10.32.228.103
-SSH_TARGET=10.32.6.189
+SSH_TARGET=172.16.111.128
 #USER=root
 USER=sailor
-
+DESTDIR=/home/sailor
 all: $(ALL)
 
 index:
@@ -24,17 +24,17 @@ skbtrace: skbtrace.o
 	$(CC) $(ALL_CFLAGS) -o $@ $(filter %.o,$^) $(LIBS)
 
 scp:
-	ssh root@${SSH_TARGET} mkdir -p /tmp/userland
-	scp ../skbtrace-userland/*.[ch] ${USER}@${SSH_TARGET}:/tmp/userland
-	scp ../skbtrace-userland/Makefile ${USER}@${SSH_TARGET}:/tmp/userland
-	scp ../skbtrace-userland/skbparse ${USER}@${SSH_TARGET}:/tmp/userland
-	scp ../skbtrace-userland/*.py ${USER}@${SSH_TARGET}:/tmp/userland
-	scp -r ../skbtrace-userland/include ${USER}@${SSH_TARGET}:/tmp/userland
+	ssh ${USER}@${SSH_TARGET} mkdir -p ${DESTDIR}/userland
+	scp ../skbtrace-userland/*.[ch] ${USER}@${SSH_TARGET}:${DESTDIR}/userland
+	scp ../skbtrace-userland/Makefile ${USER}@${SSH_TARGET}:${DESTDIR}/userland
+	scp ../skbtrace-userland/skbparse ${USER}@${SSH_TARGET}:${DESTDIR}/userland
+	scp ../skbtrace-userland/*.py ${USER}@${SSH_TARGET}:${DESTDIR}/userland
+	scp -r ../skbtrace-userland/include ${USER}@${SSH_TARGET}:${DESTDIR}/userland
 
 scpfrom:
-	scp ${USER}@${SSH_TARGET}:/tmp/userland/*.c .
-	scp ${USER}@${SSH_TARGET}:/tmp/userland/skbparse .
-	scp ${USER}@${SSH_TARGET}:/tmp/userland/*.py .
+	scp ${USER}@${SSH_TARGET}:${DESTDIR}/userland/*.c .
+	scp ${USER}@${SSH_TARGET}:${DESTDIR}/userland/skbparse .
+	scp ${USER}@${SSH_TARGET}:${DESTDIR}/userland/*.py .
 
 clean: 
 	rm -f *.o $(PROGS) tags cscope*
