@@ -190,11 +190,11 @@ class tcp_rttm:
 class tcp_ca_state:
 	action = 106
 	flags = {
-		1<<0 : "Open",
-		1<<1 : "Disorder",
-		1<<2 : "CWR",
-		1<<3 : "Recovery",
-		1<<4 : "Loss",
+		1<<0 : "open",
+		1<<1 : "disorder",
+		1<<2 : "cwr",
+		1<<3 : "recovery",
+		1<<4 : "loss",
 	}
 	def __init__(self, block, trace):
 		self.blk = block
