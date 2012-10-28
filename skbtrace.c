@@ -81,8 +81,8 @@
 	"\t-b ARG Sub-buffer size in kernel ring buffer, in bytes\n" \
 	"\t-n ARG Number of sub-buffers in kernel ring buffer\n" \
 	"\t-c ARG Where to search configuration file skbtrace.conf, default is to enable all tracepoints\n" \
-	"\t-C CHANNEL_LIST The channel list that enable tracing\n" \
-	"\t\tCHANNEL_LIST\t\tAvailable channels are syscall, softirq, hardirq, default is all\n" \
+	"\t-C CONTEXT_LIST The context list that enable tracing\n" \
+	"\t\tCONTEXT_LIST\t\tAvailable contexts are syscall, softirq, hardirq, default is all\n" \
 	"\t-p PROCESSOR_LIST The processor list to enable tracing, default is all\n" \
 	"\t-e EVENT[,OPTIONS_LIST] Specifiy an interesting tracepoint, this can be used multiple times\n" \
 	"\t\tEVENT\t\tOne of available tracepoints, please refer the output of -l option\n" \
