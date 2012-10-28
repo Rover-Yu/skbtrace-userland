@@ -7,30 +7,30 @@ Command line options
 
 Skbtrace provides below two user space utilties:
 
-* skbtrace, this utility records traced binary data from kernel into some files
-* skbparse, this utility parsed binary traced data into human readable text form.
+* skbtrace, this utility is used to record traced binary data from kernel into some files
+* skbparse, this utility is used to parse binary traced data into human readable text form.
 
 
 skbtrace
 ==========
 
 ``-r PATH``
-   The mount point of debugfs file system. skbtrace need to read traced binary data from debugfs (relayfs) file system. skbtrace will try to mount it if it was not mounted at PATH.
+   The mount point of debugfs file system. skbtrace use debugfs to read traced binary data from kernel. skbtrace tries to mount it if it was not mounted at PATH.
 
    Default is /sys/kernel/debug.
 
 ``-D DIR``
-   The directory that record traced binary data. skbtrace will try to create it first if it did not exist.
+   The directory which record traced binary data into. skbtrace tries to create it first if it did not exist.
    
    Default is ./skbtrace.results
 
 ``-w SECONDS``
    Sets run time to the number of seconds specified.
 
-   Default: Run until receiving SIGINT signal (Press Ctrl-C and by kill command). Of course, you also can use SIGKILL to terminate skbtrace, but it is not recommended, because of skbtrace may drop some trace data under this means, and you may can not unload these skbtrace kernel modules since non-zero reference counts (you can run skbtrace with -w option again to reset reference count of kernel modules to zero).
+   Default: Run until receiving SIGINT signal (Press Ctrl-C and by kill command). Of course, you also can use SIGKILL to terminate skbtrace, but it is not recommended, because of skbtrace may drop some trace data at this time, and then you probably can not unload these skbtrace kernel modules since non-zero reference counts (Tips: normal terminating skbtrace again can reset reference count of kernel modules).
 
 ``-b BYTES`` ``-n COUNT``
-   Specfify size and count of sub buffers in relay file system. You may try to increase these if skbtrace reported some trace data are dropped.
+   Specfify size and count of sub buffers in relay file system. You may try to increase these if skbtrace reported some traced data are dropped.
 
 ``-c PATH_LIST``
    The comma separated path list to locate configuration file skbtrace.conf. All configurations in found skbtrace.conf files will be merged together.
@@ -38,7 +38,7 @@ skbtrace
    Default is to enable all events.
 
 ``-C CONTEXT_LIST``
-   Specify to what are interested contexts events are triggered. The events may be triggered in hard interrupt context, softirq context or syscall context. Sometimes, we only focus on events are triggered under some contexts, this option provide such capability to filter out these uninterested contexts.
+   Specify to which are interested contexts events are triggered under. Events may be triggered under hard interrupt context, softirq context or syscall context. Sometimes, we only focus on events are triggered under specific contexts, this option provides such capability to filter out these uninterested contexts.
 
    * CONTEXT_LIST The comma separated CONTEXT list, CONTEXT may be:
         * syscall
@@ -55,22 +55,22 @@ skbtrace
    Default is all processors.
 
 ``-e EVENT[,OPTIONS_LIST]``
-   What events are your interested, this option can be used repeatly, each one give a different trace event.
+   Specify which are events you interested to, this option can be used repeatly, each one give a different trace event.
 
        * EVENT	 The name of trace event.
-       * OPTIONS_LIST	The option list of trace event.
+       * OPTIONS_LIST	The colon separated OPTION list of trace event, 
 
    For completed events reference manual, please refer to :ref:`events` .
 
    Default are to enable all events.
 
 ``-F FILTER``
-   Specify the BPF based packet events filter. For syntax , please refer to manual of libpcap.
+   Specify the BPF based packet events filter. Please refer to manual of libpcap for syntax details
 
    Default is empty filter.
 
 ``-S FILTER``
-   Specifies the BPF based connection events filter. It only has TCP/IPv4 connections support, and only can use IP address and port to filter.
+   Specify the BPF based connection events filter. It only support TCP/IPv4 connections at present, and only can use IP addresses or/and ports. Please refer to manual of libpcap for syntax details.
 
    Default is empty filter.
 
@@ -78,16 +78,16 @@ skbtrace
    This option is designed to work together with skbparse, it control skbparse to show parsed results at console lively. But this feature still is incompleted.
 
 ``-f``
-  With option, skbtrace will overwrite possible old traced data.
+   Overwrite possible old traced data without any warning.
 
 ``-l``
-  Show all available trace events list.
+   Show all available trace events list.
 
 ``-V``
-  Show more internal runtime information.
+   Show more internal runtime information.
 
 ``-v``
-  Show version number, then quit.
+   Show version number, then quit.
 
 skbparse
 ==========
@@ -102,12 +102,12 @@ skbparse
   Show parsed results on standard output.
 
 ``-o PATH``
-  The output directory to save skbparse results.
+  The output directory to save parsed human readable results.
  
   Default is current directory.
 
 ``-i PATH``
-  The output directory to save traced binary skbtrace data.
+  The output directory to read trace binary data are recorded by skbtrace.
 
   Default is ./skbtrace.results
 

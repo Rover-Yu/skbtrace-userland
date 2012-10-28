@@ -8,7 +8,7 @@ Trace events list
 Options
 ===========
 
-The event options are used to tune conditions that events occur, e.g, we can skip CWR events by give mask=CWR option of tcp_congestion event.
+The event options are used to tune conditions of events occur, e.g, if we did not care CWR then we can skip them by give mask=CWR option of tcp_congestion event.
 
 Below are all common options.
 
@@ -17,7 +17,7 @@ mask
 
 Not all events support this option.
 
-This option can be used to skip some uninterested event conditions, e.g, the tcp_congestion event occurs on TCP feels networks is overloaded, the possible conditions are CWR, FRTO, Fast Retransmitation, Loss, FRTO-Loss. If we only care that segments loss conditions, then we can use follow command line option: ::
+This option can be used to skip some uninterested event conditions, e.g, the tcp_congestion event occurs on TCP feels networks is overloaded, the possible conditions are CWR, FRTO, Fast Retransmitation, Loss, FRTO-Loss. If we only care that segments loss conditions, then we can use follow command line option of skbtrace: ::
 
         -e tcp_congestion,mask=CWR:FRTO:FastRtx
 
@@ -26,15 +26,15 @@ So CWR, FRTO and Fast Retransmitation events do not be recorded at disk.
 primary
 -----------
 
-By default, all trace events are treated independently. that is, if you enabled it and they are successfully passed a variety of filter operations, then all they will be recorded to disk. In many cases, this simple model works well, but these filtered events still result in a lot of results mixed much valueless and some valuable data in some cases.
+By default, all trace events are treated independently. that is, if you enabled it and they are successfully passed a variety of BPF filter operations, then skbtrace will record them to disk. In many cases, this simple model works well, but these events passed through BPF filters still result in a lot of bytes mixed much valueless and some valuable data in some cases.
 
-We hope record the event more targeted by create dependency among events, we only care about the event A if and only if any of event B are occured later, that is, it is only valuable to record occured events A before event B occured. In this scenario, we called event B as the "primary event" of event A. The primary option is used to establish this kind of association among events.
+We hope record the event more targeted by create dependency among events, we only care about the event A if and only if any of event B are occured later, that is, it is only valuable to record occured events A before event B occured. In this scenario, we called event B as the "primary event" of event A. The primary option is used to establish this kind of association among one primary event and some slave events.
 
-For example, if we wanted to verify whether significant jitter of RTT can be used to predict possible TCP segments loss, then we may use below command line option: ::
+For example, if we wanted to verify whether significant jitter of RTT can be used to predict possible TCP segments loss, then we may use below command line option of skbtrace: ::
 
        -e tcp_rttm,primary=tcp_congestion -e tcp_congestion,mask=CWR:FRTO:FastRtx
 
-In above example, tcp_rttm is a slave event, tcp_congestion is its primary event. Only tcp_rttm events occus before tcp_congestion will be recorded on disks.
+In above example, tcp_rttm is a slave event, tcp_congestion is its primary event. Only tcp_rttm events that occured before tcp_congestion will be recorded on disks.
 
 The limitation of current implementaton: a primary event can correspond to multiple slave events, but a event can not be as slave event of mulitple primary events at same time. 
 
@@ -53,8 +53,8 @@ We will introduce many events, we use skb_rps_info as example to describe common
 Fields：
 
     * 144574                    - sequence, each event has a unique sequence number, the events that have small value of sequence number ocurr before events that have big one.
-    * 1347852135.451990372      - time stamp, the unit is second. 
-    * action=rps_info           - event name, name is rps_info here.
+    * 1347852135.451990372      - time stamp (Unit: second)
+    * action=rps_info           - event name, name is "rps_info" here.
     * skb=0xffff880037c7f4c0 (or sk=0x.....)    - the memory address of data structure triggers this event. e.g, we may use this magic number to find out further information of corresponding TCP connection.
 
 skb_rps_info
@@ -84,7 +84,7 @@ skb_rps_info
 TCP
 ============
 
-   All of the following events are based on the events of the connection, therefore need to use -S option filtration.
+        Default, all of the following events are connection based events, therefore you need to use -S option filtration.
 
 tcp_congestion
 ---------------
@@ -99,13 +99,13 @@ A parsed example ::
 
 Fields:
       * state=FRTO-Loss         - The type of congestion, Possible values of::
-             * CWR              - Congestion Window Reduced, e.g. received ECE bit with ECN, or local congestion.
+             * CWR              - Congestion Window Reduced, e.g. received ECE bit with ECN or local congestion.
              * Loss             - Packets loss
              * FRTO-Loss        - Packets loss with enabled F-RTO.
              * FRTO             - F-RTO is detecting if RTO is spurious.
              * FastRtx          - Enter fast retransmitation
-      * cwnd=32768              - Congestion window on congestion occurs, unit: segment
-      * rto=201                 - RTO, unit：ms
+      * cwnd=32768              - Congestion window on congestion occurs (Unit: segment)
+      * rto=201                 - RTO, (Unit：microsecond)
       * sndnxt=1076842762       - TCP SND_NXT
       * snduna=1076842762       - TCP SND_UNA
 
@@ -247,7 +247,7 @@ Fields:
 
 tcp_active_conn
 -----------------
- 　Record address information of current active TCP connections, each active TCP connection only can be record one time.
+ 　Record address information of current active TCP connections, each active TCP connection only record one time each executing skbtrace.
 
    A parsed example ::
 
