@@ -294,6 +294,44 @@ class tcp_timer:
 			s += [" timeout=%dms" % self.timeout]
 		return "".join(s)
 
+class tcp_reset:
+	action = 107
+	def __init__(self, block, trace):
+		self.blk = block
+		size = block.len - block.common_header_size()
+		data = trace.read(size)
+		if not data:
+			raise ValueError, "invalid tcp_reset block"
+		loc = data[0:8]
+		state = data[8:16]
+		self.location = struct.unpack("L", loc)[0]
+		self.state = struct.unpack("B7x", state)[0]
+		self.state = tcp_conn.flags.get(1<<self.state)
+		self.local = None
+		self.peer = None
+		data = data[struct.calcsize("LL"):]
+		local, size = parse_sockaddr(data)
+		if size:
+			self.local = local
+		if not (block.flags & ((1<<8)|(1<<9))):
+			peer, size = parse_sockaddr(data[size:])
+			if size:
+				self.peer = peer
+
+	def __str__(self):
+		s = ["action=tcp_reset"]
+		s += [" sk=0x%x" % self.blk.ptr]
+		s += [" state=%s" % self.state]
+		if 1 != self.location:
+			s += [" op=send loc=%s" % kallsyms_lookup(self.location)]
+		else:
+			s += [" op=recv"]
+		if self.local:
+			s += [" local=%s:%d" % (self.local[0], self.local[1])]
+		if self.peer:
+			s += [" peer=%s:%d" % (self.peer[0], self.peer[1])]
+		return "".join(s)
+
 events_list = [tcp_cong, tcp_conn, tcp_sendlim,\
 		icsk_conn, tcp_active_conn, tcp_rttm, tcp_ca_state,
-		tcp_timer]
+		tcp_timer, tcp_reset]
