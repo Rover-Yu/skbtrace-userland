@@ -2,6 +2,7 @@
 
 import socket
 import sys
+from bisect import bisect_left
 
 IPPROTO_IP = 0
 IPPROTO_ICMP = 1
@@ -62,3 +63,35 @@ def open_file(fn, mode):
 		print "Can't open", fn
 		sys.exit(1)
 
+kallsyms = {}
+kallsyms_index = []
+
+def kallsyms_load():
+	global kallsyms, kallsyms_index
+	lines = file("/proc/kallsyms").readlines()
+	for line in lines:
+		line = line.strip()
+		sym_addr, sym_type, sym_name = line.split(" ", 3)
+		if sym_type not in "tT":
+			continue
+		sym_addr = eval("0x" + sym_addr)
+		sym = sym_name.split("\t")
+		if len(sym) == 2:
+			sym_name = sym[1] + ":" + sym[0]
+		else:
+			sym_name = sym[0]
+		kallsyms[sym_addr] = sym_name
+		kallsyms_index.append(sym_addr)
+	kallsyms_index.sort()
+
+def kallsyms_lookup(loc):
+	global kallsyms, kallsyms_index
+	if 0 == loc:
+		return "0x%x" % loc
+	if not kallsyms:
+		kallsyms_load()
+	i = bisect_left(kallsyms_index, loc)
+	if i:
+		sym_addr = kallsyms_index[i - 1]
+		return "0x%x" % loc + "=" + kallsyms[sym_addr] + "+0x%x" % (loc - sym_addr)
+	return "0x%x" % loc
