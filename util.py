@@ -84,7 +84,7 @@ def kallsyms_load():
 		kallsyms_index.append(sym_addr)
 	kallsyms_index.sort()
 
-def kallsyms_lookup(loc):
+def kallsyms_lookup(loc, show_offset = False):
 	global kallsyms, kallsyms_index
 	if 0 == loc:
 		return "0x%x" % loc
@@ -93,5 +93,8 @@ def kallsyms_lookup(loc):
 	i = bisect_left(kallsyms_index, loc)
 	if i:
 		sym_addr = kallsyms_index[i - 1]
-		return "0x%x" % loc + "=" + kallsyms[sym_addr] + "+0x%x" % (loc - sym_addr)
+		if show_offset:
+			return kallsyms[sym_addr] + "+0x%x" % (loc - sym_addr)
+		else:
+			return kallsyms[sym_addr]
 	return "0x%x" % loc

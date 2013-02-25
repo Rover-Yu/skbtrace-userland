@@ -323,7 +323,7 @@ class tcp_reset:
 		s += [" sk=0x%x" % self.blk.ptr]
 		s += [" state=%s" % self.state]
 		if 1 != self.location:
-			s += [" op=send loc=%s" % kallsyms_lookup(self.location)]
+			s += [" op=send loc=%s" % kallsyms_lookup(self.location, True)]
 		else:
 			s += [" op=recv"]
 		if self.local:
