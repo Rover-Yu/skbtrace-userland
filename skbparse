@@ -17,7 +17,7 @@ import events_common
 import events_ipv4
 
 SKBPARSE_VERSION = "0.1.0"
-SKBTRACE_BLOCK_MAGIC = 0xDEADBEEF
+SKBTRACE_BLOCK_MAGIC = 0x56a52f2350abae57
 
 Action_table = {}
 
@@ -78,6 +78,8 @@ class skbtrace_block:
 		fmt = "LHHILLLL"
 		self.magic, self.len, self.action, self.flags, self.sec, self.nsec, \
 			self.seq, self.ptr = struct.unpack(fmt, binary)
+		if self.magic != SKBTRACE_BLOCK_MAGIC:
+			raise ValueError, "invalid block magic"
 		common_flags = self.flags & 0xf0000000
 		self.flags &= ~(0xf0000000)
 		desc = []
