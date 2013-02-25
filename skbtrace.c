@@ -218,8 +218,10 @@ static inline char *skbtrace_version(void)
 	if (fp)
 		fclose(fp); /* only care first line */
 	if (err) {
-		fprintf(stderr, "Failed to read %s"
-				SKBTRACE_VERSION_PATH ": %m\n", Debugfs_path);
+		fprintf(stderr, "%s:Failed to read %s"
+				SKBTRACE_VERSION_PATH ": %m\n",
+				__func__,
+				Debugfs_path);
 		exit(1);
 	}
 	return line;
@@ -237,8 +239,10 @@ static inline char *skbtrace_dropped(void)
 	if (fp)
 		fclose(fp); /* only care first line */
 	if (err)
-		fprintf(stderr, "Failed to read %s"
-			SKBTRACE_DROPPED_PATH ": %m\n", Debugfs_path);
+		fprintf(stderr, "%s:Failed to read %s"
+			SKBTRACE_DROPPED_PATH ": %m\n",
+			__func__,
+			Debugfs_path);
 	return line;
 }
 
@@ -263,10 +267,15 @@ static char *read_one_line(const char *dir, const char *fn,
 	}
 
 	if (-1 == getline(line, len, *fp)) {
-		*err = errno;
-		fclose(*fp);
-		*fp = NULL;
-		return NULL;
+		if (-EINVAL == errno) {
+			*err = errno;
+			fclose(*fp);
+			*fp = NULL;
+			return NULL;
+		} else {
+			fclose(*fp);
+			*fp = NULL;
+		}
 	}
 	(*line)[strlen(*line) - 1] = '\x0'; /* remove tailing '\n' */
 	*err = 0;
@@ -315,7 +324,7 @@ static int load_available_events(void)
 	Available_events = NULL;
 
 	while (read_one_line(Debugfs_path, SKBTRACE_ENABLED_PATH,
-						&fp, &line, &len, &err)) {
+					&fp, &line, &len, &err) && fp) {
 		struct available_event *e;
 
 		e = malloc(sizeof(struct available_event));
@@ -339,12 +348,15 @@ static int load_available_events(void)
 			e->options = "none";
 		e->next = Available_events;
 		Available_events = e;
+		err = 0;
 	}
 	if (line)
 		free(line);
 	if (err) {
-		fprintf(stderr, "Failed to read %s"
-			SKBTRACE_ENABLED_PATH ": %m\n", Debugfs_path);
+		fprintf(stderr, "%s:Failed to read %s"
+			SKBTRACE_ENABLED_PATH ": %m\n",
+			__func__,
+			Debugfs_path);
 		exit(1);
 	}
 	return 0;
